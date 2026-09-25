@@ -4,9 +4,18 @@
 
 Lanes 是一个便携式的 Windows 小程序，让官方哔哩哔哩桌面客户端用多条连接、多个 CDN 节点同时下载视频。
 
+我平时看 B 站经常卡顿，很感谢有 BTR 的出现。因为不想把它装进哔哩哔哩客户端内部，所以用 AI 做了这个独立的小程序。
+
 **加速功能不是 Lanes 做的**，而是 LouieTang（[MrTangLuyao](https://github.com/MrTangLuyao)）开发的 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**。Lanes 原封不动地运行 BTR 桌面版 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的页面代码，只另外加上一个独立的操作窗口。Lanes 是非官方的第三方项目，并非 BTR 作者制作或认可。
 
 Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户端就回到原生下载。
+
+<p>
+  <img src="docs/main-zh-CN.png" width="200" alt="主界面：实时下载速度">
+  <img src="docs/threads-zh-CN.png" width="200" alt="各线程速度">
+  <img src="docs/settings-zh-CN.png" width="200" alt="设置：语言、开机启动、通知区域">
+  <img src="docs/settings2-zh-CN.png" width="200" alt="设置：CDN 节点、版本与更新">
+</p>
 
 ## 功能
 
@@ -22,8 +31,9 @@ Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户�
 
 ## 使用
 
-1. 把 `Lanes` 文件夹放在任意位置（便携式），运行 `Lanes.exe`。
-2. 照常打开哔哩哔哩、播放视频即可。
+1. 到[最新发行版](https://github.com/ChiaWei0804/lanes/releases/latest)下载 `Lanes-<版本>.zip`；旁边带 `-update` 的文件只用于程序内更新。
+2. 解压后把 `Lanes` 文件夹放在任意位置（便携式），运行 `Lanes.exe`。它没有数字签名，首次运行时 Windows 可能弹出警告，请点“更多信息”→“仍要运行”。
+3. 照常打开哔哩哔哩、播放视频即可。
 
 需求：Windows 10 或 11（64 位）与官方哔哩哔哩桌面客户端。无需另外安装任何东西：`node.exe` 就在文件夹里，窗口使用 Windows 自带的 .NET Framework。
 
@@ -53,6 +63,7 @@ node check.cjs             # 自检
 | `app/lang/*.json` | 界面文字：英文、繁体中文、简体中文 |
 | `vendor/btr/` | BTR 0.9.4.2-d1 的页面文件（commit 80ff272），未修改，MIT 许可证见 `vendor/btr/LICENSE` |
 | `version.json` | 版本号，以及检查更新用的 GitHub 仓库 |
+| `docs/` | 这份 README 里的截图 |
 
 发布 X.Y.Z 版：在 `version.json` 修改版本号，运行 `node build.cjs --release`，在 GitHub 创建标签为 `vX.Y.Z` 的发行版，并附上 `dist/Lanes-X.Y.Z.zip` 与 `dist/Lanes-X.Y.Z-update.zip`。后者是不含 `node.exe` 的同一份内容（约 0.1 MB）；已安装的 Node 与打包时相同时，程序内更新只下载它。
 

@@ -4,9 +4,18 @@
 
 Lanes is a portable Windows app that makes the official Bilibili desktop client download videos over many connections and CDN nodes at once.
 
+Videos on Bilibili often stuttered for me, and I'm very grateful that BTR exists. I didn't want to install it inside the Bilibili client, so I used AI to make this small standalone program.
+
 **The acceleration is not Lanes' own work.** It is **[Bilibili-thread-ripper (BTR)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)** by LouieTang ([MrTangLuyao](https://github.com/MrTangLuyao)). Lanes runs the page code of BTR's desktop edition, **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)**, unmodified, and only adds a separate window to control it. Lanes is an unofficial third-party project; BTR's author did not make or endorse it.
 
 Lanes does not change any file of the Bilibili client, and when Lanes is closed the client downloads natively again.
+
+<p>
+  <img src="docs/main-en.png" width="200" alt="Main window: live download speed">
+  <img src="docs/threads-en.png" width="200" alt="Speed per thread">
+  <img src="docs/settings-en.png" width="200" alt="Settings: language, start at sign-in, notification area">
+  <img src="docs/settings2-en.png" width="200" alt="Settings: CDN region, version and updates">
+</p>
 
 ## Features
 
@@ -22,8 +31,9 @@ Lanes does not change any file of the Bilibili client, and when Lanes is closed 
 
 ## Use
 
-1. Put the `Lanes` folder anywhere (it is portable) and run `Lanes.exe`.
-2. Open Bilibili as usual and play a video.
+1. Download `Lanes-<version>.zip` from the [latest release](https://github.com/ChiaWei0804/lanes/releases/latest). The `-update` file next to it is only for in-app updates.
+2. Extract it, put the `Lanes` folder anywhere (it is portable) and run `Lanes.exe`. It is not code-signed, so Windows may warn the first time: choose **More info → Run anyway**.
+3. Open Bilibili as usual and play a video.
 
 Requirements: Windows 10 or 11 (64-bit) and the official Bilibili desktop client. Nothing else to install: `node.exe` ships in the folder, and the window uses the .NET Framework built into Windows.
 
@@ -52,6 +62,7 @@ node check.cjs             # self-checks
 | `app/lang/*.json` | Interface text in English, Traditional Chinese and Simplified Chinese |
 | `vendor/btr/` | BTR 0.9.4.2-d1 page files (commit 80ff272), unmodified, MIT license in `vendor/btr/LICENSE` |
 | `version.json` | Version and the GitHub repository checked for updates |
+| `docs/` | The screenshots in this README |
 
 To publish version X.Y.Z: set it in `version.json`, run `node build.cjs --release`, create a GitHub release tagged `vX.Y.Z`, and attach `dist/Lanes-X.Y.Z.zip` and `dist/Lanes-X.Y.Z-update.zip`. The second one is the same without `node.exe` (about 0.1 MB); the in-app update downloads only that one while the installed Node is the one it was built with.
 

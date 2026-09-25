@@ -1,7 +1,7 @@
 "use strict";
 // Self-checks for Lanes. Run: node check.cjs
 const assert = require("assert"), fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), http = require("http");
-const { shouldTakeOver, installMeter, isNewer, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState, releaseAssets, download, installUpdate } = require("./btr-local.cjs");
+const { shouldTakeOver, installMeter, isNewer, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState, releaseAssets, download, installUpdate, slotStep, slotMemos } = require("./btr-local.cjs");
 
 // ---- takeover rule ----
 const now = 1000000, base = { initial: null, attempted: new Set(), lastTakeoverAt: -Infinity, now, restartRunning: false, tries: 0 };
@@ -77,7 +77,10 @@ console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
   assert.deepEqual(slots.map(s => [s.bytes, s.busy, s.host]), [[1500, false, "a.bilivideo.com"], [1500, false, "b.bilivideo.com"]], "bytes counted, slots freed at the end");
 
   await read(await root.fetch("https://c.bilivideo.com/x.m4s", piece));
-  assert.equal(slots.length, 2, "a free slot is reused"); assert.equal(slots[0].bytes, 3000);
+  assert.equal(slots.length, 2, "a free slot is reused");
+  assert.deepEqual([slots[0].bytes, slots[0].run], [1500, 2], "taken for another node, the slot starts a new run with its own count");
+  await read(await root.fetch("https://c.bilivideo.com/x.m4s", piece));
+  assert.deepEqual([slots[0].bytes, slots[0].run], [3000, 2], "the same node again goes on counting in the same run");
 
   await read(await root.fetch("https://c.bilivideo.com/x.m4s", { headers: { Range: "bytes=0-9" } }));
   await read(await root.fetch("https://api.bilibili.com/x", {}));
@@ -103,6 +106,26 @@ console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
   assert.equal(staleSlot.busy, true, "the old stream's end does not free the new owner's slot");
   await read(fresher); Date.now = realNow;
   assert.equal(staleSlot.busy, false);
+
+  // The poll, through the real POLL_SCRIPT: each cell counts only its current node's run.
+  const player = { fetch: async url => new Response(new Uint8Array(url.includes("//a.") ? 1000 : 500), { status: 206 }) };
+  vm.createContext(player);
+  player.__BTR_LOCAL__ = { lease: 0, id: 1, slots: installMeter(player) };
+  player.__BTR_DESKTOP__ = { getSettings: () => ({ mode: "custom", customHosts: [] }), getStatus: () => ({ transport: { networkBytes: 0 }, playback: null }) };
+  const get = async host => read(await player.fetch(`https://${host}.bilivideo.com/x.m4s`, piece));
+  const polled = () => vm.runInContext(POLL_SCRIPT, player);
+  const tab = {};
+  assert.equal(await get("a"), 1000, "the downloader still gets every byte");
+  let step = slotStep(slotMemos(tab, polled().page)[0] ??= {}, polled().slots[0], 1);
+  assert.deepEqual([step.rate, step.restart], [0, true], "a slot seen for the first time only sets its baseline");
+  assert.equal(await get("b"), 500); await get("a");
+  step = slotStep(slotMemos(tab, polled().page)[0], polled().slots[0], 1);
+  assert.deepEqual([step.rate, step.restart, step.host], [1000, true, "a.bilivideo.com"], "A -> B -> A within one poll: only the last A run counts, and the cell starts over");
+  await get("a");
+  step = slotStep(slotMemos(tab, polled().page)[0], polled().slots[0], 1);
+  assert.deepEqual([step.rate, step.restart], [1000, false], "the same run keeps growing");
+  assert.equal(slotMemos(tab, 2).length, 0, "a reloaded page (new meter id) starts with fresh baselines");
+  assert.deepEqual(slotStep({ bytes: 100, run: undefined }, [300, "x", undefined], 1), { rate: 200, restart: false, host: "x" }, "a page from an older Lanes counts as one run");
   console.log("thread meter: ok");
 
   // ---- automatic update checks only find a release; one that fails keeps the last result ----

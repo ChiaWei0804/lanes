@@ -43,12 +43,15 @@ function installMeter(root) {
     try {
       const range = init && init.headers && (init.headers.Range || init.headers.range);
       if (range && init.credentials === "omit" && init.cache === "no-store") {
-        const now = Date.now();
+        const now = Date.now(), host = new URL(String(input)).hostname;
         slot = slots.find(item => !item.busy || now - item.at > STALE_MS);
-        if (!slot) { slot = { bytes: 0 }; slots.push(slot); }
+        if (!slot) { slot = { bytes: 0, run: 0 }; slots.push(slot); }
+        // Taken for another node, a slot starts a new run with its own count, so the window never shows one node's
+        // bytes under another; the same node again goes on counting.
+        if (slot.host !== host) { slot.run += 1; slot.bytes = 0; slot.host = host; }
         // A stale slot may still have its old stream alive: only the current owner counts or frees it.
         owner = {}; slot.owner = owner;
-        slot.busy = true; slot.at = now; slot.host = new URL(String(input)).hostname;
+        slot.busy = true; slot.at = now;
       }
     } catch (_) { slot = null; }
     const pending = native(input, init);
@@ -80,7 +83,7 @@ function installMeter(root) {
 // When this program stops renewing the lease (closed or killed), new requests go native; running ones finish.
 const PAGE_SCRIPT = `if (window === top && location.origin === "https://bilipc.bilibili.com" && location.pathname === "/player.html" && !globalThis.__BTR_DESKTOP__) {
 globalThis.__BTR_DESKTOP_RELEASE__ = { version: "0.9.4.2-d1+lanes-${VERSION}", adapterRevision: 1 };
-globalThis.__BTR_LOCAL__ = { lease: Date.now(), slots: (${installMeter})(globalThis) };
+globalThis.__BTR_LOCAL__ = { lease: Date.now(), id: Date.now() + Math.random(), slots: (${installMeter})(globalThis) };
 ${bundle}
 setInterval(() => { const api = globalThis.__BTR_DESKTOP__; if (api && Date.now() - globalThis.__BTR_LOCAL__.lease > ${LEASE_MS} && api.getSettings().enabled) api.setSettings({ enabled: false }); }, 1000);
 }`;
@@ -92,7 +95,7 @@ const POLL_SCRIPT = `(() => {
   local.lease = Date.now();
   const status = api.getStatus?.(), t = status?.transport, s = api.getSettings(), media = status?.playback;
   const hostsOk = s.mode !== "custom" || s.customHosts.join() === (globalThis.__BILI_CDN_RESOLVER_FACTORY__?.GLOBAL_HOSTS || []).join();
-  return t ? { playing: !!media && !media.paused, settings: { enabled: s.enabled, mode: s.mode, autoConcurrency: s.autoConcurrency, concurrency: s.concurrency, hostsOk }, bytes: t.networkBytes, requests: t.acceleratedRequests, fallbacks: t.fallbackRequests, active: t.activeThreads, threads: t.threads, suspended: t.suspended, slots: (local.slots || []).map(slot => [slot.bytes, slot.host || ""]) } : null;
+  return t ? { playing: !!media && !media.paused, settings: { enabled: s.enabled, mode: s.mode, autoConcurrency: s.autoConcurrency, concurrency: s.concurrency, hostsOk }, bytes: t.networkBytes, requests: t.acceleratedRequests, fallbacks: t.fallbackRequests, active: t.activeThreads, threads: t.threads, suspended: t.suspended, page: local.id, slots: (local.slots || []).map(slot => [slot.bytes, slot.host || "", slot.run]) } : null;
 })()`;
 
 // ---- settings -------------------------------------------------------------------------------------
@@ -193,21 +196,37 @@ function grown(page, key, value) {
   const before = page[key]; page[key] = value;
   return before === undefined || before === null || value < before ? 0 : value - before;
 }
+// One poll of one slot: its cell's bytes/s, and whether the cell's smoothed speed starts over. A slot seen for the
+// first time only sets its baseline; a new run (the slot moved to another node) counts only that run's bytes. A page
+// injected by an older Lanes reports no run, and keeps counting as one run.
+function slotStep(memo, [bytes, host, run], seconds) {
+  const seen = memo.bytes !== undefined, sameRun = seen && memo.run === run;
+  const delta = !seen ? 0 : sameRun ? Math.max(0, bytes - memo.bytes) : bytes;
+  memo.bytes = bytes; memo.run = run;
+  return { rate: delta / seconds, restart: !sameRun, host };
+}
+// A reload keeps the CDP session but brings a new meter (a new id), whose slots start again. A page injected by an
+// older Lanes has no id.
+function slotMemos(page, id) {
+  if (page.id !== id) { page.id = id; page.slots = []; }
+  return page.slots ??= [];
+}
 async function poll() {
   if (polling) return; polling = true;
   const now = Date.now(), seconds = Math.max(0.001, (now - lastPoll) / 1000); lastPoll = now;
   let bytes = 0; const next = { requests: 0, fallbacks: 0, active: 0, threads: 0, suspended: false, playing: false, foreign: false };
-  const slotRates = [], slotHosts = [];
+  const slotRates = [], slotHosts = [], slotRestarts = [];
   await Promise.all([...pages].map(async ([sessionId, page]) => {
     const s = await evaluate(sessionId, POLL_SCRIPT).catch(() => undefined);
     if (!s) return;
     if (s.foreign) { next.foreign = true; return; }
     bytes += grown(page, "bytes", s.bytes);
-    page.slots ??= [];
-    (s.slots || []).forEach(([slotBytes, host], i) => {
-      page.slots[i] ??= {};
-      slotRates[i] = (slotRates[i] || 0) + grown(page.slots[i], "bytes", slotBytes) / seconds;
-      if (host) slotHosts[i] = host;
+    const memos = slotMemos(page, s.page);
+    (s.slots || []).forEach((sample, i) => {
+      const step = slotStep(memos[i] ??= {}, sample, seconds);
+      slotRates[i] = (slotRates[i] || 0) + step.rate;
+      if (step.restart) slotRestarts[i] = true;
+      if (step.host) slotHosts[i] = step.host;
     });
     counted.requests += grown(page, "requests", s.requests);
     counted.fallbacks += grown(page, "fallbacks", s.fallbacks);
@@ -217,7 +236,7 @@ async function poll() {
   }));
   speed = speed * 0.5 + (bytes / seconds) * 0.5;
   next.requests = counted.requests; next.fallbacks = counted.fallbacks;
-  threadSpeeds = slotRates.map((rate, i) => ({ speed: (threadSpeeds[i]?.speed || 0) * 0.5 + rate * 0.5, host: slotHosts[i] || threadSpeeds[i]?.host || "" }));
+  threadSpeeds = slotRates.map((rate, i) => ({ speed: slotRestarts[i] ? rate : (threadSpeeds[i]?.speed || 0) * 0.5 + rate * 0.5, host: slotHosts[i] || threadSpeeds[i]?.host || "" }));
   if (next.fallbacks > stats.fallbacks) log(`Acceleration failed and a request went back to native download (${next.fallbacks} so far)`);
   if (next.suspended && !stats.suspended) log("A player window kept failing; BTR suspended acceleration there");
   if (next.foreign && !stats.foreign) log("BTR Desktop is installed in the client; Lanes does not inject there");
@@ -500,4 +519,4 @@ function main() {
     watchClient();
   });
 }
-if (require.main === module) main(); else module.exports = { shouldTakeOver, installMeter, isNewer, APPLY_SCRIPT, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState: () => update.state, releaseAssets, download, installUpdate };
+if (require.main === module) main(); else module.exports = { shouldTakeOver, installMeter, isNewer, APPLY_SCRIPT, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState: () => update.state, releaseAssets, download, installUpdate, slotStep, slotMemos };

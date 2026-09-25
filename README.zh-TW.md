@@ -4,9 +4,18 @@
 
 Lanes 是一個可攜式的 Windows 小程式，讓官方嗶哩嗶哩桌面客戶端用多條連線、多個 CDN 節點同時下載影片。
 
+我平常看 B 站時常卡頓，很感謝有 BTR 的出現。因為不想把它裝進嗶哩嗶哩客戶端內部，所以用 AI 做了這個獨立的小程式。
+
 **加速功能不是 Lanes 做的**，而是 LouieTang（[MrTangLuyao](https://github.com/MrTangLuyao)）開發的 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**。Lanes 原封不動地執行 BTR 桌面版 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的頁面程式碼，只另外加上一個獨立的操作視窗。Lanes 是非官方的第三方專案，並非 BTR 作者製作或認可。
 
 Lanes 不會修改嗶哩嗶哩客戶端的任何檔案，關掉 Lanes，客戶端就回到原生下載。
+
+<p>
+  <img src="docs/main-zh-TW.png" width="200" alt="主畫面：即時下載速度">
+  <img src="docs/threads-zh-TW.png" width="200" alt="各線程速度">
+  <img src="docs/settings-zh-TW.png" width="200" alt="設定：語言、開機啟動、通知區域">
+  <img src="docs/settings2-zh-TW.png" width="200" alt="設定：CDN 節點、版本與更新">
+</p>
 
 ## 功能
 
@@ -22,8 +31,9 @@ Lanes 不會修改嗶哩嗶哩客戶端的任何檔案，關掉 Lanes，客戶�
 
 ## 使用
 
-1. 把 `Lanes` 資料夾放在任何位置（可攜式），執行 `Lanes.exe`。
-2. 照平常方式開啟嗶哩嗶哩、播放影片即可。
+1. 到[最新發行版](https://github.com/ChiaWei0804/lanes/releases/latest)下載 `Lanes-<版本>.zip`；旁邊帶 `-update` 的檔案只給程式內更新使用。
+2. 解壓縮後把 `Lanes` 資料夾放在任何位置（可攜式），執行 `Lanes.exe`。它沒有數位簽章，第一次執行時 Windows 可能跳出警告，請按「其他資訊」→「仍要執行」。
+3. 照平常方式開啟嗶哩嗶哩、播放影片即可。
 
 需求：Windows 10 或 11（64 位元）與官方嗶哩嗶哩桌面客戶端。不需要另外安裝任何東西：`node.exe` 就在資料夾裡，視窗使用 Windows 內建的 .NET Framework。
 
@@ -52,6 +62,7 @@ node check.cjs             # 自我檢查
 | `app/lang/*.json` | 介面文字：英文、繁體中文、簡體中文 |
 | `vendor/btr/` | BTR 0.9.4.2-d1 的頁面檔（commit 80ff272），未修改，MIT 授權見 `vendor/btr/LICENSE` |
 | `version.json` | 版本號，以及檢查更新用的 GitHub repository |
+| `docs/` | 這份 README 裡的截圖 |
 
 發布 X.Y.Z 版：在 `version.json` 改版本號，執行 `node build.cjs --release`，在 GitHub 建立標籤為 `vX.Y.Z` 的發行版，並附上 `dist/Lanes-X.Y.Z.zip` 與 `dist/Lanes-X.Y.Z-update.zip`。後者是不含 `node.exe` 的同一份內容（約 0.1 MB）；已安裝的 Node 和打包時相同時，程式內更新只下載它。
 
