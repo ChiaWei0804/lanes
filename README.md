@@ -2,7 +2,11 @@
 
 **English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md)
 
-Lanes is a portable Windows app that makes the official Bilibili desktop client download videos over many connections and CDN nodes at once. It is a standalone interface for **[Bilibili-thread-ripper (BTR)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**: the acceleration itself is BTR's page code from **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)**, unmodified. Lanes does not change any file of the Bilibili client, and when Lanes is closed the client downloads natively again.
+Lanes is a portable Windows app that makes the official Bilibili desktop client download videos over many connections and CDN nodes at once.
+
+**The acceleration is not Lanes' own work.** It is **[Bilibili-thread-ripper (BTR)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)** by LouieTang ([MrTangLuyao](https://github.com/MrTangLuyao)). Lanes runs the page code of BTR's desktop edition, **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)**, unmodified, and only adds a separate window to control it. Lanes is an unofficial third-party project; BTR's author did not make or endorse it.
+
+Lanes does not change any file of the Bilibili client, and when Lanes is closed the client downloads natively again.
 
 ## Features
 

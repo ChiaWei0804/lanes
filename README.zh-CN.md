@@ -2,7 +2,11 @@
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · **简体中文**
 
-Lanes 是一个便携式的 Windows 小程序，让官方哔哩哔哩桌面客户端用多条连接、多个 CDN 节点同时下载视频。它是 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)** 的独立操作界面：加速本身是 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的页面代码，原封不动。Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户端就回到原生下载。
+Lanes 是一个便携式的 Windows 小程序，让官方哔哩哔哩桌面客户端用多条连接、多个 CDN 节点同时下载视频。
+
+**加速功能不是 Lanes 做的**，而是 LouieTang（[MrTangLuyao](https://github.com/MrTangLuyao)）开发的 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**。Lanes 原封不动地运行 BTR 桌面版 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的页面代码，只另外加上一个独立的操作窗口。Lanes 是非官方的第三方项目，并非 BTR 作者制作或认可。
+
+Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户端就回到原生下载。
 
 ## 功能
 

@@ -11,7 +11,13 @@ const CLIENT_NAME = String.fromCharCode(0x54d4, 0x54e9, 0x54d4, 0x54e9);
 const CLIENT_EXE = process.env.LANES_CLIENT_EXE || `C:\\Program Files\\bilibili\\${CLIENT_NAME}.exe`;
 const CDP_PORT = 39229, UI_PORT = 39230;
 const SETTINGS_FILE = path.join(__dirname, "settings.json");
-const { version: VERSION, repository: REPOSITORY } = JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8"));
+// Notepad and PowerShell 5 may save these files with a byte order mark, which JSON.parse rejects, and PowerShell 5's
+// ">" writes UTF-16.
+const readJsonFile = file => {
+  const bytes = fs.readFileSync(file);
+  return JSON.parse(bytes.toString(bytes[0] === 0xff && bytes[1] === 0xfe ? "utf16le" : "utf8").replace(/^\uFEFF/, ""));
+};
+const { version: VERSION, repository: REPOSITORY } = readJsonFile(path.join(__dirname, "version.json"));
 const THREADS = ["auto", 8, 16, 32, 64], MODES = ["auto", "overseas", "mainland"], LANGUAGES = ["en", "zh-Hant", "zh-Hans"];
 const LEASE_MS = 6000, POLL_MS = 500;
 // The running client holds this open; its mtime is the client's start time.
@@ -101,7 +107,7 @@ function merged(base, patch) {
   return next;
 }
 let settings = { ...DEFAULTS };
-try { const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8")); if (saved && typeof saved === "object") settings = merged(DEFAULTS, saved); } catch (_) {}
+try { const saved = readJsonFile(SETTINGS_FILE); if (saved && typeof saved === "object") settings = merged(DEFAULTS, saved); } catch (_) {}
 // Region "auto" is BTR's custom mode over all of its nodes, overseas and mainland: BTR measures each node and gives
 // the fast ones the video. The node list is BTR's own GLOBAL_HOSTS, filled in by the page (pushScript).
 const toBtr = s => ({ enabled: s.enabled, mode: s.mode === "auto" ? "custom" : s.mode, ...(s.threads === "auto" ? { autoConcurrency: true } : { autoConcurrency: false, concurrency: s.threads }) });
@@ -329,7 +335,7 @@ async function checkUpdate(manual = true) {
 // up first and restored on failure; without a complete backup nothing is copied. update-result.txt tells the next
 // start what happened.
 const APPLY_SCRIPT = [
-  "param([string]$Source, [string]$Target, [string]$Wait)",
+  "param([string]$Source, [string]$Target, [string]$Wait, [string]$Work)",
   "foreach ($id in ($Wait -split ',')) { Wait-Process -Id ([int]$id) -Timeout 60 -ErrorAction SilentlyContinue }",
   "Start-Sleep -Milliseconds 500",
   "$result = Join-Path $Target 'update-result.txt'",
@@ -345,9 +351,12 @@ const APPLY_SCRIPT = [
   "    robocopy $backup $Target /E /R:10 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null",
   "    $restore = $LASTEXITCODE",
   "    if ($restore -lt 8) { Set-Content -Path $result -Value \"Update failed (robocopy exit $code); the previous version was restored\" }",
-  "    else { Set-Content -Path $result -Value \"Update failed (robocopy exit $code) and restoring the previous version failed too (robocopy exit $restore); download Lanes again from GitHub\" }",
+  "    else { Set-Content -Path $result -Value \"Update failed (robocopy exit $code) and restoring the previous version failed too (robocopy exit $restore); the previous version is kept in $backup\"; $keep = $true }",
   "  }",
   "}",
+  // The download, the unpacked files and the backup (about 130 MB) are not needed any more, unless the backup is
+  // the only complete copy left.
+  "if (-not $keep -and (Split-Path $Work -Leaf) -like 'lanes-update-*') { Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue }",
   "Start-Process -FilePath (Join-Path $Target 'Lanes.exe')"
 ].join("\r\n");
 // Download and unpack the release, then leave a script that swaps the files in once Lanes has exited
@@ -367,8 +376,13 @@ async function installUpdate() {
     for (const name of ["Lanes.exe", "btr-local.cjs", "version.json"]) if (!fs.existsSync(path.join(root, name))) throw new Error(`the update has no ${name}`);
     const script = path.join(dir, "apply.ps1");
     fs.writeFileSync(script, APPLY_SCRIPT);
-    spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script, "-Source", root, "-Target", __dirname, "-Wait", `${process.ppid},${process.pid}`],
-      { detached: true, stdio: "ignore", windowsHide: true }).unref();
+    // Node ends the processes it starts when it exits (a Windows job), and a detached PowerShell has no console and
+    // runs nothing. So a short-lived PowerShell starts the script with Start-Process, which puts it outside that job.
+    // The arguments travel in an environment variable; paths are double-quoted (a Windows path cannot contain one).
+    const args = `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${script}" -Source "${root}" -Target "${__dirname}" -Wait ${process.ppid},${process.pid} -Work "${dir}"`;
+    const started = await new Promise(resolve => spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList $env:LANES_APPLY_ARGS"],
+      { stdio: "ignore", windowsHide: true, env: { ...process.env, LANES_APPLY_ARGS: args } }).on("exit", resolve).on("error", () => resolve(-1)));
+    if (started !== 0) throw new Error(`could not start the update script (PowerShell exit ${started})`);
     update = { ...target, state: "ready" };
     log(`Update ${target.latest} downloaded; it is applied after Lanes exits`);
     return true;
