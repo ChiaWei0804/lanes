@@ -557,7 +557,8 @@ public static class Program {
     var keys = new Dictionary<string, string> { { "checking", "update.checking" }, { "latest", "update.latest" }, { "available", "update.available" }, { "downloading", "update.downloading" }, { "ready", "update.ready" }, { "failed", "update.failed" }, { "install-failed", "update.installFailed" } };
     string key;
     status.Visibility = keys.TryGetValue(updateState, out key) ? Visibility.Visible : Visibility.Collapsed;
-    if (key != null) status.Text = T(key, latest);
+    object progress;
+    if (key != null) status.Text = T(key, updateState == "downloading" && update.TryGetValue("progress", out progress) ? progress : latest);
     status.Foreground = (Brush)Application.Current.Resources[updateState == "available" ? "Accent" : updateState.EndsWith("failed") ? "Orange" : "Sub"];
     Find<TextBlock>("UpdateButtonText").Text = T(updateState == "available" ? "update.install" : "update.check");
     Find<Button>("UpdateButton").IsEnabled = updateState != "checking" && updateState != "downloading" && updateState != "ready";

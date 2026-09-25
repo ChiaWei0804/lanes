@@ -42,7 +42,7 @@ Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户�
 
 ```
 node build.cjs             # 生成 Lanes.exe；文件夹里没有 node.exe 时，把正在运行的 node.exe 复制进来
-node build.cjs --release   # 另外生成 dist/Lanes-<版本>.zip，GitHub 发行版需要附上它，程序内更新才能找到
+node build.cjs --release   # 另外生成 GitHub 发行版要附上的 dist/Lanes-<版本>.zip 与 dist/Lanes-<版本>-update.zip
 node check.cjs             # 自检
 ```
 
@@ -54,7 +54,7 @@ node check.cjs             # 自检
 | `vendor/btr/` | BTR 0.9.4.2-d1 的页面文件（commit 80ff272），未修改，MIT 许可证见 `vendor/btr/LICENSE` |
 | `version.json` | 版本号，以及检查更新用的 GitHub 仓库 |
 
-发布 X.Y.Z 版：在 `version.json` 修改版本号，运行 `node build.cjs --release`，在 GitHub 创建标签为 `vX.Y.Z` 的发行版，并附上 `dist/Lanes-X.Y.Z.zip`。
+发布 X.Y.Z 版：在 `version.json` 修改版本号，运行 `node build.cjs --release`，在 GitHub 创建标签为 `vX.Y.Z` 的发行版，并附上 `dist/Lanes-X.Y.Z.zip` 与 `dist/Lanes-X.Y.Z-update.zip`。后者是不含 `node.exe` 的同一份内容（约 0.1 MB）；已安装的 Node 与打包时相同时，程序内更新只下载它。
 
 ## 致谢
 

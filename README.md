@@ -41,7 +41,7 @@ Needs Windows and Node.js 22 or later. In this folder:
 
 ```
 node build.cjs             # builds Lanes.exe; copies the running node.exe here if none is present
-node build.cjs --release   # also writes dist/Lanes-<version>.zip, the asset a GitHub release needs for in-app updates
+node build.cjs --release   # also writes dist/Lanes-<version>.zip and dist/Lanes-<version>-update.zip for a GitHub release
 node check.cjs             # self-checks
 ```
 
@@ -53,7 +53,7 @@ node check.cjs             # self-checks
 | `vendor/btr/` | BTR 0.9.4.2-d1 page files (commit 80ff272), unmodified, MIT license in `vendor/btr/LICENSE` |
 | `version.json` | Version and the GitHub repository checked for updates |
 
-To publish version X.Y.Z: set it in `version.json`, run `node build.cjs --release`, create a GitHub release tagged `vX.Y.Z`, and attach `dist/Lanes-X.Y.Z.zip`.
+To publish version X.Y.Z: set it in `version.json`, run `node build.cjs --release`, create a GitHub release tagged `vX.Y.Z`, and attach `dist/Lanes-X.Y.Z.zip` and `dist/Lanes-X.Y.Z-update.zip`. The second one is the same without `node.exe` (about 0.1 MB); the in-app update downloads only that one while the installed Node is the one it was built with.
 
 ## Credits
 

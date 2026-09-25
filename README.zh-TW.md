@@ -41,7 +41,7 @@ Lanes 不會修改嗶哩嗶哩客戶端的任何檔案，關掉 Lanes，客戶�
 
 ```
 node build.cjs             # 產生 Lanes.exe；資料夾裡沒有 node.exe 時，把正在執行的 node.exe 複製進來
-node build.cjs --release   # 另外產生 dist/Lanes-<版本>.zip，GitHub 發行版需要附上它，程式內更新才找得到
+node build.cjs --release   # 另外產生 GitHub 發行版要附上的 dist/Lanes-<版本>.zip 與 dist/Lanes-<版本>-update.zip
 node check.cjs             # 自我檢查
 ```
 
@@ -53,7 +53,7 @@ node check.cjs             # 自我檢查
 | `vendor/btr/` | BTR 0.9.4.2-d1 的頁面檔（commit 80ff272），未修改，MIT 授權見 `vendor/btr/LICENSE` |
 | `version.json` | 版本號，以及檢查更新用的 GitHub repository |
 
-發布 X.Y.Z 版：在 `version.json` 改版本號，執行 `node build.cjs --release`，在 GitHub 建立標籤為 `vX.Y.Z` 的發行版，並附上 `dist/Lanes-X.Y.Z.zip`。
+發布 X.Y.Z 版：在 `version.json` 改版本號，執行 `node build.cjs --release`，在 GitHub 建立標籤為 `vX.Y.Z` 的發行版，並附上 `dist/Lanes-X.Y.Z.zip` 與 `dist/Lanes-X.Y.Z-update.zip`。後者是不含 `node.exe` 的同一份內容（約 0.1 MB）；已安裝的 Node 和打包時相同時，程式內更新只下載它。
 
 ## 致謝
 

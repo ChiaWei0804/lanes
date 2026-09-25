@@ -53,7 +53,7 @@
   "update.latest": "已是最新版本",
   "update.available": "有新版本 {0}",
   "update.install": "更新",
-  "update.downloading": "正在下载更新…",
+  "update.downloading": "正在下载更新… {0}%",
   "update.ready": "即将重新启动以完成更新…",
   "update.failed": "无法检查更新",
   "update.installFailed": "更新失败，详见 lanes.log",

@@ -53,7 +53,7 @@
   "update.latest": "You have the latest version",
   "update.available": "Version {0} is available",
   "update.install": "Update",
-  "update.downloading": "Downloading the update…",
+  "update.downloading": "Downloading the update… {0}%",
   "update.ready": "Restarting to finish the update…",
   "update.failed": "Could not check for updates",
   "update.installFailed": "The update failed; see lanes.log",

@@ -1,7 +1,7 @@
 "use strict";
 // Self-checks for Lanes. Run: node check.cjs
-const assert = require("assert"), fs = require("fs"), path = require("path"), vm = require("vm");
-const { shouldTakeOver, installMeter, isNewer, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState } = require("./btr-local.cjs");
+const assert = require("assert"), fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), http = require("http");
+const { shouldTakeOver, installMeter, isNewer, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState, releaseAssets, download, installUpdate } = require("./btr-local.cjs");
 
 // ---- takeover rule ----
 const now = 1000000, base = { initial: null, attempted: new Set(), lastTakeoverAt: -Infinity, now, restartRunning: false, tries: 0 };
@@ -107,6 +107,7 @@ console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
 
   // ---- automatic update checks only find a release; one that fails keeps the last result ----
   const quiet = console.error; console.error = () => {};
+  const realFetch = global.fetch;
   let calls = 0;
   const github = reply => { global.fetch = async () => { calls++; return reply(); }; };
   const release = v => ({ ok: true, status: 200, json: async () => ({ tag_name: `v${v}`, assets: [{ name: `Lanes-${v}.zip`, browser_download_url: `https://github.com/${require("./version.json").repository}/releases/download/v${v}/Lanes-${v}.zip` }] }) });
@@ -120,6 +121,45 @@ console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
   assert.equal(updateState(), "available");
   calls = 0; await checkUpdate(false);
   assert.equal(calls, 0, "a found release is not checked again automatically"); assert.equal(updateState(), "available");
+  // A failed install leaves no temporary folder behind.
+  const updateFolders = () => fs.readdirSync(os.tmpdir()).filter(name => name.startsWith("lanes-update-")).length;
+  const foldersBefore = updateFolders();
+  global.fetch = async () => ({ ok: false, status: 404, headers: new Headers() });
+  assert.equal(await installUpdate(), false); assert.equal(updateState(), "install-failed");
+  assert.equal(updateFolders(), foldersBefore, "the failed install removed its temporary folder");
+  global.fetch = realFetch;
   console.error = quiet;
   console.log("update checks: ok");
+
+  // ---- update packages: the small one is optional; downloads report percents and stop only when stalled ----
+  const repo = require("./version.json").repository, asset = (name, url = `https://github.com/${repo}/releases/download/v9.0.0/${name}`) => ({ name, size: name.includes("update") ? 2 : 3, browser_download_url: url });
+  assert.deepEqual(releaseAssets({ assets: [asset("Lanes-9.0.0.zip"), asset("Lanes-9.0.0-update.zip")] }, "9.0.0"),
+    { full: { url: asset("Lanes-9.0.0.zip").browser_download_url, size: 3 }, small: { url: asset("Lanes-9.0.0-update.zip").browser_download_url, size: 2 } });
+  const foreignSmall = releaseAssets({ assets: [asset("Lanes-9.0.0.zip"), asset("Lanes-9.0.0-update.zip", "https://example.com/Lanes-9.0.0-update.zip")] }, "9.0.0");
+  assert.ok(foreignSmall.full && !foreignSmall.small, "a small package from elsewhere is ignored; the full one is still used");
+  assert.ok(!releaseAssets({ assets: [asset("Lanes-9.0.0-update.zip")] }, "9.0.0").full, "without the full package there is no update");
+
+  // A real local server and the real fetch: chunks of the given sizes, one every `gap` ms, then the end or silence.
+  let scenario;
+  const server = http.createServer((req, res) => scenario(res));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  const at = `http://127.0.0.1:${server.address().port}/`;
+  const drip = (sizes, gap, { end = true, length } = {}) => res => {
+    res.writeHead(200, length ? { "Content-Length": length } : {});
+    let i = 0;
+    const timer = setInterval(() => { if (i < sizes.length) res.write(Buffer.alloc(sizes[i++])); else { clearInterval(timer); if (end) res.end(); } }, gap);
+    res.on("close", () => clearInterval(timer));
+  };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lanes-check-")), file = path.join(tmp, "package.zip");
+  let seen = [];
+  scenario = drip([500, 500], 40); await download(at, file, 1000, p => seen.push(p), 300);
+  assert.equal(fs.statSync(file).size, 1000); assert.deepEqual(seen, [50, 100], "percents from GitHub's asset size");
+  seen = []; scenario = drip([250, 750], 40, { length: 1000 }); await download(at, file, 0, p => seen.push(p), 300);
+  assert.deepEqual(seen, [25, 100], "percents from Content-Length when there is no asset size");
+  scenario = drip(Array(12).fill(10), 60); await download(at, file, 120, () => {}, 200);
+  assert.equal(fs.statSync(file).size, 120, "a download that keeps moving is not cut: 720 ms with a 200 ms stall limit");
+  scenario = drip([10], 10, { end: false }); await assert.rejects(download(at, file, 100, () => {}, 200), /no data for 0.2 s/);
+  scenario = drip([10], 10); await assert.rejects(download(at, file, 100, () => {}, 200), /download incomplete: 10 of 100 bytes/);
+  server.closeAllConnections(); server.close(); fs.rmSync(tmp, { recursive: true, force: true });
+  console.log("update packages: ok");
 })().catch(error => { console.error(error); process.exit(1); });

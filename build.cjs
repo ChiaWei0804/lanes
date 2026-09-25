@@ -1,7 +1,8 @@
 "use strict";
 // Builds Lanes.exe in this folder, which then holds everything Lanes needs. Run: node build.cjs
-// node build.cjs --release  also writes dist/Lanes-<version>.zip, the asset a GitHub release carries for the
-// in-app updater (the source archives GitHub makes lack Lanes.exe and node.exe).
+// node build.cjs --release  also writes the two assets a GitHub release carries (the source archives GitHub makes lack
+// Lanes.exe and node.exe): dist/Lanes-<version>.zip, everything, for new installs and for 1.0.0's updater, and
+// dist/Lanes-<version>-update.zip, the same without node.exe, which the updater takes when its Node is the same.
 // Lanes.exe (app/Lanes.cs, app/ui.xaml, app/lang/*.json) is compiled with the C# compiler that ships with
 // Windows (.NET Framework 4), in two passes: the first build writes the icon, the second embeds it.
 const { execFileSync } = require("child_process"), path = require("path"), fs = require("fs"), os = require("os");
@@ -25,15 +26,23 @@ console.log(`built ${path.join(__dirname, "Lanes.exe")}`);
 
 if (process.argv.includes("--release")) {
   const { version } = JSON.parse(fs.readFileSync(path.join(__dirname, "version.json"), "utf8"));
-  const dist = path.join(__dirname, "dist"), stage = path.join(dist, "Lanes"), zip = path.join(dist, `Lanes-${version}.zip`);
-  fs.rmSync(stage, { recursive: true, force: true }); fs.rmSync(zip, { force: true });
+  const dist = path.join(__dirname, "dist"), stage = path.join(dist, "Lanes");
+  const full = path.join(dist, `Lanes-${version}.zip`), small = path.join(dist, `Lanes-${version}-update.zip`);
+  for (const old of [stage, full, small]) fs.rmSync(old, { recursive: true, force: true });
   // What runs, plus the documentation; the source (app/, build.cjs, check.cjs) stays in the repository.
   const files = ["Lanes.exe", "node.exe", "btr-local.cjs", "version.json", ...fs.readdirSync(__dirname).filter(f => /^README.*\.md$|^LICENSE$/.test(f))];
   fs.mkdirSync(stage, { recursive: true });
   for (const file of files) fs.copyFileSync(path.join(__dirname, file), path.join(stage, file));
   fs.cpSync(path.join(__dirname, "vendor"), path.join(stage, "vendor"), { recursive: true });
+  // Both packages name the Node they were built with; the repository's version.json does not change.
+  const staged = path.join(stage, "version.json");
+  const nodeVersion = execFileSync(node, ["--version"]).toString().trim();
+  fs.writeFileSync(staged, JSON.stringify({ ...JSON.parse(fs.readFileSync(staged, "utf8")), node: nodeVersion }, null, 2) + "\n");
   // Windows' own tar writes zip archives (-a picks the format from the extension); Git Bash's tar cannot.
-  execFileSync(path.join(process.env.WINDIR, "System32", "tar.exe"), ["-a", "-cf", zip, "-C", dist, "Lanes"]);
+  const tar = path.join(process.env.WINDIR, "System32", "tar.exe");
+  execFileSync(tar, ["-a", "-cf", full, "-C", dist, "Lanes"]);
+  fs.rmSync(path.join(stage, "node.exe"));
+  execFileSync(tar, ["-a", "-cf", small, "-C", dist, "Lanes"]);
   fs.rmSync(stage, { recursive: true, force: true });
-  console.log(`release asset ${zip}`);
+  console.log(`release assets (Node ${nodeVersion}):\n  ${full}\n  ${small}`);
 }

@@ -300,8 +300,15 @@ async function watchClient() {
 }
 
 // ---- updates --------------------------------------------------------------------------------------
-// Releases on GitHub carry the built folder as Lanes-<version>.zip (node build.cjs --release).
+// Releases on GitHub carry the built folder as Lanes-<version>.zip, and since 1.0.1 also Lanes-<version>-update.zip,
+// the same without node.exe (node build.cjs --release). Only files under this repository's releases are taken; the
+// small one is optional, so a missing or foreign one just means the full download.
 let update = { state: "idle" };
+function releaseAssets(release, latest) {
+  const ours = name => (release.assets || []).find(item => item.name === name && String(item.browser_download_url).startsWith(`https://github.com/${REPOSITORY}/releases/download/`));
+  const pick = item => item && { url: item.browser_download_url, size: Number(item.size) || 0 };
+  return { full: pick(ours(`Lanes-${latest}.zip`)), small: pick(ours(`Lanes-${latest}-update.zip`)) };
+}
 function isNewer(candidate, current) {
   const a = candidate.split(".").map(Number), b = current.split(".").map(Number);
   for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
@@ -319,11 +326,11 @@ async function checkUpdate(manual = true) {
     else if (!res.ok) update = { state: "failed", reason: res.status === 403 || res.status === 429 ? "GitHub rate limit" : `HTTP ${res.status}` };
     else {
       const release = await res.json(), latest = String(release.tag_name || "").replace(/^v/i, "");
-      const asset = (release.assets || []).find(item => item.name === `Lanes-${latest}.zip`);
+      const { full, small } = releaseAssets(release, latest);
       if (!/^\d+\.\d+\.\d+$/.test(latest)) update = { state: "failed", reason: `unexpected tag ${release.tag_name}` };
       else if (!isNewer(latest, VERSION)) update = { state: "latest", latest };
-      else if (!asset || !asset.browser_download_url.startsWith(`https://github.com/${REPOSITORY}/releases/download/`)) update = { state: "failed", reason: `release ${latest} has no Lanes-${latest}.zip` };
-      else update = { state: "available", latest, url: asset.browser_download_url };
+      else if (!full) update = { state: "failed", reason: `release ${latest} has no Lanes-${latest}.zip` };
+      else update = { state: "available", latest, full, small };
     }
   } catch (error) { update = { state: "failed", reason: error.message }; }
   log(`${manual ? "Update check" : "Automatic update check"}: ${update.state}${update.latest ? ` (${update.latest})` : ""}${update.reason ? ` - ${update.reason}` : ""}`);
@@ -364,16 +371,17 @@ const APPLY_SCRIPT = [
 async function installUpdate() {
   if (update.state !== "available") return false;
   const target = update;
-  update = { ...target, state: "downloading" };
+  update = { ...target, state: "downloading", progress: 0 };
+  let dir = null;
   try {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanes-update-")), zip = path.join(dir, "update.zip"), files = path.join(dir, "files");
-    const res = await fetch(target.url, { headers: { "User-Agent": `Lanes/${VERSION}` }, signal: AbortSignal.timeout(300000) });
-    if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
-    fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
-    fs.mkdirSync(files);
-    execFileSync(path.join(process.env.WINDIR, "System32", "tar.exe"), ["-xf", zip, "-C", files], { windowsHide: true });
-    const root = fs.existsSync(path.join(files, "Lanes.exe")) ? files : path.join(files, "Lanes");
-    for (const name of ["Lanes.exe", "btr-local.cjs", "version.json"]) if (!fs.existsSync(path.join(root, name))) throw new Error(`the update has no ${name}`);
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "lanes-update-"));
+    // The small package fits when it was built with the Node this runs on; otherwise the full one brings node.exe.
+    let root = target.small && await fetchPackage(target.small, dir, "update");
+    if (root) {
+      const node = readJsonFile(path.join(root, "version.json")).node;
+      if (node !== process.version) { log(`The update comes with Node ${node || "(unknown)"}, this is ${process.version}; downloading the full package`); root = null; }
+    }
+    if (!root) root = await fetchPackage(target.full, dir, "full");
     const script = path.join(dir, "apply.ps1");
     fs.writeFileSync(script, APPLY_SCRIPT);
     // Node ends the processes it starts when it exits (a Windows job), and a detached PowerShell has no console and
@@ -389,7 +397,47 @@ async function installUpdate() {
   } catch (error) {
     update = { ...target, state: "install-failed", reason: error.message };
     log(`Update failed: ${error.message}`);
+    try { if (dir) fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
     return false;
+  }
+}
+// Downloads one release file into dir and unpacks it; returns the folder that holds Lanes.exe.
+async function fetchPackage(asset, dir, name) {
+  const zip = path.join(dir, `${name}.zip`), files = path.join(dir, name);
+  log(`Downloading the ${name} package (${(asset.size / 1048576).toFixed(1)} MB)`);
+  update = { ...update, progress: 0 };
+  await download(asset.url, zip, asset.size, progress => { update = { ...update, progress }; });
+  fs.mkdirSync(files);
+  execFileSync(path.join(process.env.WINDIR, "System32", "tar.exe"), ["-xf", zip, "-C", files], { windowsHide: true });
+  const root = fs.existsSync(path.join(files, "Lanes.exe")) ? files : path.join(files, "Lanes");
+  for (const file of ["Lanes.exe", "btr-local.cjs", "version.json"]) if (!fs.existsSync(path.join(root, file))) throw new Error(`the ${name} package has no ${file}`);
+  return root;
+}
+// Streams a file to disk, reporting whole percents. A slow download goes on as long as data keeps coming; it stops
+// after stallMs without any. A byte count other than the expected size (GitHub's asset size, else Content-Length)
+// fails, so a cut transfer is never unpacked.
+async function download(url, file, size, onProgress, stallMs = 60000) {
+  const controller = new AbortController();
+  let timer;
+  const alive = () => { clearTimeout(timer); timer = setTimeout(() => controller.abort(new Error(`no data for ${stallMs / 1000} s`)), stallMs); };
+  // Plain synchronous writes: a write stream reports its errors later, as events, when the folder may be gone.
+  const fd = fs.openSync(file, "w");
+  alive();
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": `Lanes/${VERSION}` }, signal: controller.signal });
+    if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
+    const expected = size || Number(res.headers.get("content-length")) || 0;
+    let received = 0;
+    for await (const chunk of res.body) {
+      alive();
+      fs.writeSync(fd, chunk);
+      received += chunk.length;
+      if (expected) onProgress(Math.min(100, Math.floor(received / expected * 100)));
+    }
+    if (expected && received !== expected) throw new Error(`download incomplete: ${received} of ${expected} bytes`);
+  } finally {
+    clearTimeout(timer);
+    fs.closeSync(fd);
   }
 }
 
@@ -405,7 +453,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.host !== `127.0.0.1:${UI_PORT}` || req.headers.origin !== undefined || req.headers["x-btr-token"] !== token) { res.writeHead(403); return res.end(); }
   if (req.method === "GET" && url.pathname === "/status") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    return res.end(JSON.stringify({ state, settings, version: VERSION, update: { state: update.state, latest: update.latest || "" }, speed: Math.round(speed), ...stats,
+    return res.end(JSON.stringify({ state, settings, version: VERSION, update: { state: update.state, latest: update.latest || "", progress: update.progress || 0 }, speed: Math.round(speed), ...stats,
       threadSpeeds: threadSpeeds.map(t => ({ speed: Math.round(t.speed), host: t.host })) }));
   }
   if (req.method === "POST" && url.pathname === "/settings") { applySettings(await readJson(req)); res.writeHead(204); return res.end(); }
@@ -452,4 +500,4 @@ function main() {
     watchClient();
   });
 }
-if (require.main === module) main(); else module.exports = { shouldTakeOver, installMeter, isNewer, APPLY_SCRIPT, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState: () => update.state };
+if (require.main === module) main(); else module.exports = { shouldTakeOver, installMeter, isNewer, APPLY_SCRIPT, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState: () => update.state, releaseAssets, download, installUpdate };
