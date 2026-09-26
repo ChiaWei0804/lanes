@@ -4,7 +4,7 @@
 
 Lanes 是一個可攜式的 Windows 小程式，讓官方嗶哩嗶哩桌面客戶端用多條連線、多個 CDN 節點同時下載影片。
 
-我平常看 B 站時常卡頓，很感謝有 BTR 的出現。因為不想把它裝進嗶哩嗶哩客戶端內部，所以用 AI 做了這個獨立的小程式。
+平常看 B 站常常卡，BTR 的出現確實解決了這個問題。因為不想把它裝進嗶哩嗶哩客戶端裡，所以用 Claude 做了這個獨立的小程式。
 
 **加速功能不是 Lanes 做的**，而是 LouieTang（[MrTangLuyao](https://github.com/MrTangLuyao)）開發的 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**。Lanes 原封不動地執行 BTR 桌面版 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的頁面程式碼，只另外加上一個獨立的操作視窗。Lanes 是非官方的第三方專案，並非 BTR 作者製作或認可。
 
