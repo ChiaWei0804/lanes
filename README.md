@@ -8,6 +8,8 @@ Bilibili videos often stuttered for me, and BTR really solved that. I didn't wan
 
 **The acceleration is not Lanes' own work.** It is **[Bilibili-thread-ripper (BTR)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)** by LouieTang ([MrTangLuyao](https://github.com/MrTangLuyao)). Lanes runs the page code of BTR's desktop edition, **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)**, unmodified, and only adds a separate window to control it. Lanes is an unofficial third-party project; BTR's author did not make or endorse it.
 
+**BTR version used:** Bilibili-thread-ripper-desktop **0.9.4.2-d1** ([commit 80ff272](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/80ff27254c354eaf8e87d1ff19124122691a9259)). Lanes follows BTR's desktop edition, not the browser one.
+
 Lanes does not change any file of the Bilibili client, and when Lanes is closed the client downloads natively again.
 
 <p>
