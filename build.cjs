@@ -29,8 +29,9 @@ if (process.argv.includes("--release")) {
   const dist = path.join(__dirname, "dist"), stage = path.join(dist, "Lanes");
   const full = path.join(dist, `Lanes-${version}.zip`), small = path.join(dist, `Lanes-${version}-update.zip`);
   for (const old of [stage, full, small]) fs.rmSync(old, { recursive: true, force: true });
-  // What runs, plus the documentation; the source (app/, build.cjs, check.cjs) stays in the repository.
-  const files = ["Lanes.exe", "node.exe", "btr-local.cjs", "version.json", ...fs.readdirSync(__dirname).filter(f => /^README.*\.md$|^LICENSE$/.test(f))];
+  // What runs, plus the licenses (BTR's MIT notice sits in vendor/btr); the README and the source (app/, build.cjs,
+  // check.cjs) stay in the repository.
+  const files = ["Lanes.exe", "node.exe", "btr-local.cjs", "version.json", "LICENSE"];
   fs.mkdirSync(stage, { recursive: true });
   for (const file of files) fs.copyFileSync(path.join(__dirname, file), path.join(stage, file));
   fs.cpSync(path.join(__dirname, "vendor"), path.join(stage, "vendor"), { recursive: true });
