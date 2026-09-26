@@ -161,6 +161,12 @@ async function attachPage({ sessionId, waitingForDebugger }) {
   await evaluate(sessionId, PAGE_SCRIPT + ";0", 10000).catch(() => {});
   await pushSettings(sessionId);
 }
+// A worker or any other target that is not a page: let it run and let go of it. A service worker does not always say
+// that it waits (waitingForDebugger false) and still holds its start until released, so it is released regardless.
+function releaseTarget({ sessionId }) {
+  send("Runtime.runIfWaitingForDebugger", {}, sessionId, 5000).catch(() => {})
+    .finally(() => send("Target.detachFromTarget", { sessionId }, undefined, 5000).catch(() => {}));
+}
 async function connect() {
   const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`)).json();
   await new Promise((resolve, reject) => {
@@ -176,11 +182,14 @@ async function connect() {
     socket.onmessage = ({ data }) => {
       const m = JSON.parse(data);
       if (m.id) { const wait = waits.get(m.id); waits.delete(m.id); if (wait) m.error ? wait.reject(new Error(m.error.message)) : wait.resolve(m.result); return; }
-      if (m.method === "Target.attachedToTarget") attachPage(m.params);
+      if (m.method === "Target.attachedToTarget") (m.params.targetInfo.type === "page" ? attachPage : releaseTarget)(m.params);
       if (m.method === "Target.detachedFromTarget") pages.delete(m.params.sessionId);
     };
   });
-  await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true, filter: [{ type: "page" }] });
+  // Every new target waits for this program (no filter: all but the browser itself), because the wait also holds
+  // targets a filter would leave out: a service worker held that way never starts, and live.bilibili.com's pages,
+  // which all go through one, stay black. Pages get the bundle; everything else is released at once (releaseTarget).
+  await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
   takeoverTries = 0;
   setState("connected");
 }
