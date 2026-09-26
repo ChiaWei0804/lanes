@@ -50,7 +50,7 @@ public static class Program {
   static readonly List<Border> threadCells = new List<Border>();
   static Dictionary<string, string> strings = new Dictionary<string, string>(), english;
   static int failures = 0, noticeClickedAt;
-  static bool rendering, polling, quitting, closeToTray, trayHinted, threadView, balloonIsUpdate;
+  static bool rendering, polling, quitting, closeToTray, threadView;
   static string dir, logPath, language, current, noticeClickedState, updateState = "idle", announced;
 
   [STAThread]
@@ -197,7 +197,8 @@ public static class Program {
     trayOpen = menu.Items.Add(T("tray.open"), null, delegate { ShowWindow(); });
     trayQuit = menu.Items.Add(T("tray.quit"), null, delegate { Quit(); });
     tray.ContextMenuStrip = menu;
-    tray.BalloonTipClicked += delegate { ShowWindow(); if (balloonIsUpdate) ShowPage(true); };
+    // The only balloon is the one about a new version: clicking it opens the settings, where Update is.
+    tray.BalloonTipClicked += delegate { ShowWindow(); ShowPage(true); };
   }
 
   static void ShowWindow() {
@@ -207,13 +208,10 @@ public static class Program {
     window.Activate();
   }
 
+  // Quietly: the setting already says what closing does.
   static void HideToTray() {
     window.Hide();
     Log("Window hidden to the notification area");
-    if (trayHinted) return;
-    trayHinted = true;
-    balloonIsUpdate = false;
-    tray.ShowBalloonTip(4000, T("tray.hintTitle"), T("tray.hint"), System.Windows.Forms.ToolTipIcon.None);
   }
 
   static void Quit(bool closeWindow = true) {
@@ -566,10 +564,8 @@ public static class Program {
     // Found in the background (Lanes often runs hidden): say so once per version, unless the window is in view.
     if (updateState == "available" && latest != announced) {
       announced = latest;
-      if (!window.IsVisible || window.WindowState == WindowState.Minimized) {
-        balloonIsUpdate = true;
+      if (!window.IsVisible || window.WindowState == WindowState.Minimized)
         tray.ShowBalloonTip(5000, T("tray.updateTitle"), T("tray.update", latest), System.Windows.Forms.ToolTipIcon.None);
-      }
     }
     // The new files go in once Lanes has exited; the controller left a script waiting for that.
     if (updateState == "ready" && !quitting) Quit();

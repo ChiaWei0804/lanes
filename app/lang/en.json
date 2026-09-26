@@ -63,8 +63,6 @@
   "tray.open": "Open Lanes",
   "tray.quit": "Quit Lanes",
   "tray.accelerating": "Lanes — accelerating",
-  "tray.hintTitle": "Lanes is still running",
-  "tray.hint": "Acceleration continues in the background. Click the Lanes icon to reopen it.",
   "tray.updateTitle": "A Lanes update is available",
   "tray.update": "Version {0} is ready. Click here to open Settings, then choose Update.",
   "error.node": "Node.js was not found. Put node.exe in the Lanes folder, or install Node.js 22 or later.",

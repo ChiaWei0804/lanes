@@ -63,8 +63,6 @@
   "tray.open": "打开 Lanes",
   "tray.quit": "退出 Lanes",
   "tray.accelerating": "Lanes — 加速中",
-  "tray.hintTitle": "Lanes 仍在运行",
-  "tray.hint": "加速会在后台继续。点击右下角的 Lanes 图标可以再次打开。",
   "tray.updateTitle": "Lanes 有新版本",
   "tray.update": "版本 {0} 可以更新。点击这里打开设置，再点“更新”。",
   "error.node": "找不到 Node.js。请把 node.exe 放进 Lanes 文件夹，或安装 Node.js 22 及以上版本。",
