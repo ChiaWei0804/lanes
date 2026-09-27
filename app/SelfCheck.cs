@@ -163,6 +163,7 @@ public static class SelfCheck {
     Func<string, string, Dictionary<string, object>> asset = (name, url) => new Dictionary<string, object> { { "name", name }, { "size", 3 }, { "browser_download_url", url } };
     var release = new Dictionary<string, object> { { "assets", new object[] { asset("Lanes-9.0.0.zip", prefix + "v9.0.0/Lanes-9.0.0.zip"), asset("other.zip", prefix + "v9.0.0/other.zip") } } };
     Check(Controller.ReleaseAsset(release, "9.0.0", prefix) != null, "the release's package");
+    Check(Controller.ReleaseAsset(release, "9.0.0", prefix.Replace("/lanes/", "/Lanes/")) != null, "the repository name in another case (GitHub links use its current spelling)");
     var foreign = new Dictionary<string, object> { { "assets", new object[] { asset("Lanes-9.0.0.zip", "https://example.com/Lanes-9.0.0.zip") } } };
     Check(Controller.ReleaseAsset(foreign, "9.0.0", prefix) == null, "a package from elsewhere is not taken");
     Check(Controller.ReleaseAsset(new Dictionary<string, object>(), "9.0.0", prefix) == null, "a release without assets");

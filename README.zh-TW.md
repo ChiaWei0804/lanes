@@ -33,7 +33,7 @@ Lanes 不會修改嗶哩嗶哩客戶端的任何檔案，關掉 Lanes，客戶�
 
 ## 使用
 
-1. 到[最新發行版](https://github.com/ChiaWei0804/lanes/releases/latest)下載 `Lanes-<版本>.zip`。
+1. 到[最新發行版](https://github.com/ChiaWei0804/Lanes/releases/latest)下載 `Lanes-<版本>.zip`。
 2. 解壓縮後把 `Lanes` 資料夾放在任何位置（可攜式），執行 `Lanes.exe`。它沒有數位簽章，第一次執行時 Windows 可能跳出警告，請按「其他資訊」→「仍要執行」。
 3. 照平常方式開啟嗶哩嗶哩、播放影片即可。
 

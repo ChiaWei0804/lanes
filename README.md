@@ -33,7 +33,7 @@ Lanes does not change any file of the Bilibili client, and when Lanes is closed 
 
 ## Use
 
-1. Download `Lanes-<version>.zip` from the [latest release](https://github.com/ChiaWei0804/lanes/releases/latest).
+1. Download `Lanes-<version>.zip` from the [latest release](https://github.com/ChiaWei0804/Lanes/releases/latest).
 2. Extract it, put the `Lanes` folder anywhere (it is portable) and run `Lanes.exe`. It is not code-signed, so Windows may warn the first time: choose **More info → Run anyway**.
 3. Open Bilibili as usual and play a video.
 

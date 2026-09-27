@@ -521,11 +521,12 @@ public sealed class Controller {
     return false;
   }
 
-  // The release's package: Lanes-<version>.zip under this repository's release downloads, or null.
+  // The release's package: Lanes-<version>.zip under this repository's release downloads, or null. GitHub names are
+  // case-insensitive, and its links use the repository's current spelling.
   public static Dictionary<string, object> ReleaseAsset(Dictionary<string, object> release, string latest, string prefix) {
     foreach (var item in Json.Arr(Json.Get(release, "assets")) ?? new object[0]) {
       var asset = Json.Obj(item);
-      if (Json.Str(Json.Get(asset, "name")) == "Lanes-" + latest + ".zip" && Json.Str(Json.Get(asset, "browser_download_url")).StartsWith(prefix, StringComparison.Ordinal)) return asset;
+      if (Json.Str(Json.Get(asset, "name")) == "Lanes-" + latest + ".zip" && Json.Str(Json.Get(asset, "browser_download_url")).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return asset;
     }
     return null;
   }

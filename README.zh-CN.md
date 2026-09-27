@@ -33,7 +33,7 @@ Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户�
 
 ## 使用
 
-1. 到[最新发行版](https://github.com/ChiaWei0804/lanes/releases/latest)下载 `Lanes-<版本>.zip`。
+1. 到[最新发行版](https://github.com/ChiaWei0804/Lanes/releases/latest)下载 `Lanes-<版本>.zip`。
 2. 解压后把 `Lanes` 文件夹放在任意位置（便携式），运行 `Lanes.exe`。它没有数字签名，首次运行时 Windows 可能弹出警告，请点“更多信息”→“仍要运行”。
 3. 照常打开哔哩哔哩、播放视频即可。
 
