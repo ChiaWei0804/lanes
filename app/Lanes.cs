@@ -154,13 +154,9 @@ public static class Program {
     var cjk = code == "zh-Hans" ? "Microsoft YaHei UI" : "Microsoft JhengHei UI";
     resources["Body"] = new FontFamily("Segoe UI Variable Text, Segoe UI, " + cjk);
     resources["Display"] = new FontFamily("Segoe UI Variable Display, Segoe UI, " + cjk);
-    // YaHei's strokes are heavier than JhengHei's: its regular is as dark as JhengHei's bold. Simplified Chinese goes one
-    // face lighter so both look alike (neither has Medium or SemiBold faces: those render as Regular and Bold).
-    var yahei = code == "zh-Hans";
-    resources["W.Normal"] = yahei ? FontWeights.Light : FontWeights.Normal;
-    resources["W.Medium"] = yahei ? FontWeights.Light : FontWeights.Medium;
-    resources["W.SemiBold"] = yahei ? FontWeights.Normal : FontWeights.SemiBold;
-    resources["W.Bold"] = yahei ? FontWeights.Normal : FontWeights.Bold;
+    // YaHei's strokes are heavier than JhengHei's (its regular is as dark as JhengHei's bold): the small descriptions
+    // under each row go one face lighter in Simplified Chinese.
+    resources["SubWeight"] = code == "zh-Hans" ? FontWeights.Light : FontWeights.Normal;
     if (tray != null) { trayOpen.Text = T("tray.open"); trayQuit.Text = T("tray.quit"); }
   }
 
@@ -267,8 +263,7 @@ public static class Program {
       for (var i = 0; i < values.Length; i++) {
         var value = values[i];
         var text = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold };
-        if (labels[i].StartsWith("T.")) { text.SetResourceReference(TextBlock.TextProperty, labels[i]); text.SetResourceReference(TextBlock.FontWeightProperty, "W.SemiBold"); }
-        else text.Text = labels[i];
+        if (labels[i].StartsWith("T.")) text.SetResourceReference(TextBlock.TextProperty, labels[i]); else text.Text = labels[i];
         var button = new Button { Style = (Style)window.Resources["PlainButton"], Content = text, Name = name + "_" + i };
         button.Click += delegate { Select(value, true); pick(value); };
         grid.Children.Add(button);
