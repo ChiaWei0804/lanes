@@ -33,14 +33,17 @@ Lanes does not change any file of the Bilibili client, and when Lanes is closed 
 
 ## Use
 
-1. Download `Lanes-<version>.zip` from the [latest release](https://github.com/ChiaWei0804/lanes/releases/latest). The `-update` file next to it is only for in-app updates.
+1. Download `Lanes-<version>.zip` from the [latest release](https://github.com/ChiaWei0804/lanes/releases/latest).
 2. Extract it, put the `Lanes` folder anywhere (it is portable) and run `Lanes.exe`. It is not code-signed, so Windows may warn the first time: choose **More info → Run anyway**.
 3. Open Bilibili as usual and play a video.
 
-Requirements: Windows 10 or 11 (64-bit) and the official Bilibili desktop client. Nothing else to install: `node.exe` ships in the folder, and the window uses the .NET Framework built into Windows.
+Requirements: Windows 10 or 11 (64-bit) and the official Bilibili desktop client. Nothing else to install: Lanes uses the .NET Framework built into Windows.
+
+**Upgrading from Lanes 1.0.x:** the in-app update of 1.0.x cannot install 1.1.0. It shows "The update failed" and leaves 1.0.x as it was. Instead, quit Lanes (**Quit Lanes** in the tray menu), download `Lanes-1.1.0.zip` and extract it. To keep your settings, copy `settings.json` from the old `Lanes` folder into the new one; then the old folder, with its 88 MB `node.exe`, can be deleted. **Start at sign-in** points to the new folder once you run the new `Lanes.exe`. From 1.1.0 on, updates install from inside Lanes again.
 
 ## Good to know
 
+- To restart Bilibili, Lanes uses the program file of the Bilibili that is running, and remembers it (`clientExe` in `settings.json`) for **Open Bilibili**. If it cannot tell where Bilibili is installed, it asks you once to choose `哔哩哔哩.exe`.
 - Lanes attaches through the client's debugging port on `127.0.0.1:39229`, which only this computer can reach. While the client runs with it, other programs on this computer could use it too; it closes with the client.
 - Whether acceleration helps depends on your network. When a single connection is already fast, the difference is small; BTR helps most when single connections are slow or stall.
 - High thread counts are not always better: too many connections can make CDN nodes refuse them, and BTR then stops using those nodes until the next video. Auto is recommended.
@@ -49,24 +52,26 @@ Requirements: Windows 10 or 11 (64-bit) and the official Bilibili desktop client
 
 ## Build from source
 
-Needs Windows and Node.js 22 or later. In this folder:
+Needs Windows and Node.js 22 or later, for building and the checks only; Lanes itself does not use Node. In this folder:
 
 ```
-node build.cjs             # builds Lanes.exe; copies the running node.exe here if none is present
-node build.cjs --release   # also writes dist/Lanes-<version>.zip and dist/Lanes-<version>-update.zip for a GitHub release
-node check.cjs             # self-checks
+node build.cjs             # builds Lanes.exe with the C# compiler that ships with Windows
+node build.cjs --release   # also writes dist/Lanes-<version>.zip for a GitHub release
+node check.cjs             # self-checks: Lanes.exe --self-check, then the scripts injected into the player page
 ```
 
 | Path | What it is |
 | --- | --- |
-| `btr-local.cjs` | Controller: attaches to the client, injects BTR, owns `settings.json`, takeover, updates, local API for the window |
 | `app/Lanes.cs`, `app/ui.xaml` | The window (WPF), tray icon, settings page, log |
+| `app/Controller.cs`, `app/Cdp.cs`, `app/Client.cs`, `app/Json.cs` | Controller: attaches to the client through its debugging port, injects BTR, owns `settings.json`, takeover and restarts, updates |
+| `app/page/*.js` | Code injected into the player page next to BTR: page guard, lease, per-thread meter, status poll |
+| `app/SelfCheck.cs`, `check.cjs` | Self-checks |
 | `app/lang/*.json` | Interface text in English, Traditional Chinese and Simplified Chinese |
 | `vendor/btr/` | BTR 0.9.4.2-d1 page files (commit 80ff272), unmodified, MIT license in `vendor/btr/LICENSE` |
 | `version.json` | Version and the GitHub repository checked for updates |
 | `docs/` | The screenshots in this README |
 
-To publish version X.Y.Z: set it in `version.json`, run `node build.cjs --release`, create a GitHub release tagged `vX.Y.Z`, and attach `dist/Lanes-X.Y.Z.zip` and `dist/Lanes-X.Y.Z-update.zip`. The second one is the same without `node.exe` (about 0.1 MB); the in-app update downloads only that one while the installed Node is the one it was built with.
+To publish version X.Y.Z: set it in `version.json`, run `node build.cjs --release`, create a GitHub release tagged `vX.Y.Z`, and attach `dist/Lanes-X.Y.Z.zip`. The in-app update downloads the same file.
 
 ## Credits
 

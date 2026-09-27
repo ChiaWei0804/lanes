@@ -1,6 +1,5 @@
-# Built and copied by build.cjs; rebuild with: node build.cjs
+# Built by build.cjs; rebuild with: node build.cjs
 Lanes.exe
-node.exe
 dist/
 # Written while Lanes runs
 settings.json

@@ -1,14 +1,12 @@
-// Lanes: the window for btr-local.cjs. Starts the controller hidden, shows its status and settings in a
-// frameless rounded WPF window with a notification-area icon, and ends the controller when Lanes exits.
-// The controller watches this process's end of its stdin pipe, so it also ends if Lanes crashes.
-// Portable: settings.json, lanes.log and node.exe live in the Lanes folder. UI text comes from app/lang/*.json.
+// Lanes: the window. Shows the controller's status and settings (Controller.cs, in this same process) in a frameless
+// rounded WPF window with a notification-area icon. If Lanes is killed, the page lease stops the acceleration.
+// Portable: settings.json and lanes.log live in the Lanes folder. UI text comes from app/lang/*.json.
 // Built by build.cjs with the C# 5 compiler that ships with Windows (.NET Framework 4).
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using System.Threading;
@@ -26,10 +24,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 
 public static class Program {
-  const string Api = "http://127.0.0.1:39230";
   const string Title = "Lanes";
-  // The client's executable name (four CJK characters), built from code points so the source stays ASCII.
-  static readonly string ClientExe = new string(new[] { (char)0x54D4, (char)0x54E9, (char)0x54D4, (char)0x54E9 }) + ".exe";
   const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
   const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
   const long LogLimit = 1024 * 1024;
@@ -38,24 +33,27 @@ public static class Program {
     { "client-off", new[] { "notice.clientOff", "notice.clientOff.button", "launch" } },
     { "needs-restart", new[] { "notice.needsRestart", "notice.needsRestart.button", "restart" } },
     { "restart-failed", new[] { "notice.restartFailed", "notice.restartFailed.button", "restart" } },
+    { "client-path-missing", new[] { "notice.clientPathMissing", "notice.clientPathMissing.button", "choose" } },
   };
 
   static Window window;
-  static Process controller;
-  static HttpClient http;
+  static Controller controller;
   static System.Windows.Forms.NotifyIcon tray;
   static System.Windows.Forms.ToolStripItem trayOpen, trayQuit;
   static Segmented threadsSeg, languageSeg, regionSeg;
   static readonly List<double> history = new List<double>();
   static readonly List<Border> threadCells = new List<Border>();
   static Dictionary<string, string> strings = new Dictionary<string, string>(), english;
-  static int failures = 0, noticeClickedAt;
-  static bool rendering, polling, quitting, closeToTray, threadView;
+  static int noticeClickedAt;
+  static bool rendering, quitting, closeToTray, threadView;
   static string dir, logPath, language, current, noticeClickedState, updateState = "idle", announced;
 
   [STAThread]
   public static int Main(string[] args) {
     if (args.Length == 2 && args[0] == "--write-icon") { WriteIcon(args[1]); return 0; }
+    // Developer modes (check.cjs): the controller's self-check, and the exact page scripts it injects.
+    if (args.Length == 1 && args[0] == "--self-check") return SelfCheck.Run(AppDomain.CurrentDomain.BaseDirectory);
+    if (args.Length == 2 && args[0] == "--dump-page-scripts") return SelfCheck.DumpPageScripts(AppDomain.CurrentDomain.BaseDirectory, args[1]);
     var login = Array.IndexOf(args, "--login") >= 0;
     bool first;
     var mutex = new Mutex(true, "Lanes.Window", out first);
@@ -77,41 +75,10 @@ public static class Program {
     // The folder may have moved since start-at-sign-in was turned on; keep the entry pointing here.
     try { if (AutoStartEnabled()) SetAutoStart(true); } catch (Exception e) { Log("Could not update the sign-in entry: " + e.Message); }
 
-    var token = Guid.NewGuid().ToString("N");
-    var node = File.Exists(System.IO.Path.Combine(dir, "node.exe")) ? System.IO.Path.Combine(dir, "node.exe") : "node.exe";
-    var start = new ProcessStartInfo(node, "\"" + System.IO.Path.Combine(dir, "btr-local.cjs") + "\"") {
-      UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
-      RedirectStandardError = true, StandardErrorEncoding = Encoding.UTF8, WorkingDirectory = dir
-    };
-    start.EnvironmentVariables["BTR_TOKEN"] = token;
-    start.EnvironmentVariables["LANES_LOGIN"] = login ? "1" : "0";
-    var client = FindClient();
-    if (client != null) start.EnvironmentVariables["LANES_CLIENT_EXE"] = client;
+    controller = new Controller(dir, Log, new WindowsClientSystem());
     var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-    // Until the controller answers, the saved settings decide what closing does and which language shows.
-    var initialLanguage = "en";
-    try {
-      var saved = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(File.ReadAllText(System.IO.Path.Combine(dir, "settings.json")));
-      object value;
-      if (saved.TryGetValue("closeToTray", out value) && value is bool) closeToTray = (bool)value;
-      if (saved.TryGetValue("language", out value) && Array.IndexOf(Languages, value as string) >= 0) initialLanguage = (string)value;
-    } catch (Exception) { }
-    ApplyLanguage(initialLanguage);
-    try { controller = Process.Start(start); }
-    catch (Exception e) {
-      Log("Could not start Node.js (" + node + "): " + e.Message);
-      MessageBox.Show(T("error.node"), Title);
-      return 1;
-    }
-    // The controller reports through stderr; every line goes to lanes.log.
-    controller.ErrorDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) Log(e.Data); };
-    controller.BeginErrorReadLine();
-    controller.EnableRaisingEvents = true;
-    controller.Exited += delegate { if (!quitting) Log("The controller exited unexpectedly, code " + controller.ExitCode); };
-
-    http = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
-    http.DefaultRequestHeaders.Add("X-BTR-Token", token);
-
+    closeToTray = Json.Bool(controller.Settings["closeToTray"]);
+    ApplyLanguage((string)controller.Settings["language"]);
     ApplyTheme(app.Resources);
     using (var xaml = Assembly.GetExecutingAssembly().GetManifestResourceStream("ui.xaml")) window = (Window)XamlReader.Load(xaml);
     window.Icon = RenderIcon(256);
@@ -119,13 +86,14 @@ public static class Program {
     CreateTray();
     window.Closing += delegate(object s, System.ComponentModel.CancelEventArgs e) {
       if (quitting) return;
-      if (closeToTray) { e.Cancel = true; HideToTray(); return; }
-      Quit(false); // the window is already closing
+      e.Cancel = true;
+      if (closeToTray) HideToTray(); else Quit();
     };
     new Thread(() => { while (showSignal.WaitOne()) window.Dispatcher.BeginInvoke(new Action(ShowWindow)); }) { IsBackground = true }.Start();
     var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-    timer.Tick += delegate { Poll(); };
+    timer.Tick += delegate { if (!quitting) { try { Render(controller.Status()); } catch (Exception e) { Log("Could not show the status: " + e.Message); } } };
     timer.Start();
+    controller.Start(login);
     // At sign-in Lanes only waits in the notification area.
     if (!login) window.Show();
     app.Run();
@@ -186,6 +154,13 @@ public static class Program {
     var cjk = code == "zh-Hans" ? "Microsoft YaHei UI" : "Microsoft JhengHei UI";
     resources["Body"] = new FontFamily("Segoe UI Variable Text, Segoe UI, " + cjk);
     resources["Display"] = new FontFamily("Segoe UI Variable Display, Segoe UI, " + cjk);
+    // YaHei's strokes are heavier than JhengHei's: its regular is as dark as JhengHei's bold. Simplified Chinese goes one
+    // face lighter so both look alike (neither has Medium or SemiBold faces: those render as Regular and Bold).
+    var yahei = code == "zh-Hans";
+    resources["W.Normal"] = yahei ? FontWeights.Light : FontWeights.Normal;
+    resources["W.Medium"] = yahei ? FontWeights.Light : FontWeights.Medium;
+    resources["W.SemiBold"] = yahei ? FontWeights.Normal : FontWeights.SemiBold;
+    resources["W.Bold"] = yahei ? FontWeights.Normal : FontWeights.Bold;
     if (tray != null) { trayOpen.Text = T("tray.open"); trayQuit.Text = T("tray.quit"); }
   }
 
@@ -214,17 +189,16 @@ public static class Program {
     Log("Window hidden to the notification area");
   }
 
-  static void Quit(bool closeWindow = true) {
+  static async void Quit() {
     if (quitting) return;
     quitting = true;
     Log("Lanes exiting");
     tray.Visible = false;
     tray.Dispose();
-    // Closing the pipe tells the controller to stop accelerating and exit; in-flight downloads finish in the page.
-    try { controller.StandardInput.Close(); controller.WaitForExit(4000); } catch (Exception) { }
-    // Shutdown closes windows itself, so from inside Closing it has to wait until that close is done.
-    if (closeWindow) { window.Close(); Application.Current.Shutdown(); }
-    else window.Dispatcher.BeginInvoke(new Action(() => Application.Current.Shutdown()));
+    window.Hide();
+    // The pages stop accelerating new requests (at most 3 s); downloads already running there finish on their own.
+    try { await controller.Shutdown(); } catch (Exception e) { Log("Controller shutdown: " + e.Message); }
+    Application.Current.Shutdown();
   }
 
   static System.Drawing.Icon ToIcon(BitmapSource image) {
@@ -255,25 +229,6 @@ public static class Program {
     if (!on) return;
     // Turning it on here also clears an "off" left by Task Manager, or Windows would still skip it.
     using (var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey, true)) if (approved != null) approved.DeleteValue(Title, false);
-  }
-
-  // The client's install folder from its uninstall record; null lets the controller use the default path.
-  static string FindClient() {
-    string[] keys = { @"Software\Microsoft\Windows\CurrentVersion\Uninstall\BiliBili", @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\BiliBili" };
-    foreach (var root in new[] { Registry.CurrentUser, Registry.LocalMachine }) {
-      foreach (var name in keys) {
-        using (var key = root.OpenSubKey(name)) {
-          if (key == null) continue;
-          var icon = (key.GetValue("DisplayIcon") as string ?? "").Split(',')[0].Trim('"');
-          foreach (var folder in new[] { key.GetValue("InstallLocation") as string, icon == "" ? null : System.IO.Path.GetDirectoryName(icon) }) {
-            if (string.IsNullOrEmpty(folder)) continue;
-            var exe = System.IO.Path.Combine(folder.Trim('"'), ClientExe);
-            if (File.Exists(exe)) return exe;
-          }
-        }
-      }
-    }
-    return null;
   }
 
   // ---- UI ---------------------------------------------------------------------------------------
@@ -312,7 +267,8 @@ public static class Program {
       for (var i = 0; i < values.Length; i++) {
         var value = values[i];
         var text = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold };
-        if (labels[i].StartsWith("T.")) text.SetResourceReference(TextBlock.TextProperty, labels[i]); else text.Text = labels[i];
+        if (labels[i].StartsWith("T.")) { text.SetResourceReference(TextBlock.TextProperty, labels[i]); text.SetResourceReference(TextBlock.FontWeightProperty, "W.SemiBold"); }
+        else text.Text = labels[i];
         var button = new Button { Style = (Style)window.Resources["PlainButton"], Content = text, Name = name + "_" + i };
         button.Click += delegate { Select(value, true); pick(value); };
         grid.Children.Add(button);
@@ -336,8 +292,17 @@ public static class Program {
     }
   }
 
-  static string Json(object value) { return new JavaScriptSerializer().Serialize(value); }
-  static void Setting(string key, object value) { Post("/settings", Json(new Dictionary<string, object> { { key, value } })); }
+  static void Setting(string key, object value) { controller.ApplySettings(new Dictionary<string, object> { { key, value } }); }
+
+  // The notice's button: open the client, restart it, or let the user point at its executable.
+  static void NoticeAction(string action) {
+    if (action == "launch") controller.Launch();
+    else if (action == "restart") controller.Restart();
+    else if (action == "choose") {
+      var picker = new Microsoft.Win32.OpenFileDialog { Title = T("picker.title"), Filter = "Bilibili (" + Client.ExeName + ")|" + Client.ExeName, CheckFileExists = true };
+      if (picker.ShowDialog(window) == true) controller.ChooseClient(picker.FileName);
+    }
+  }
 
   static void Wire() {
     MouseButtonEventHandler drag = delegate(object s, MouseButtonEventArgs e) { if (e.ButtonState == MouseButtonState.Pressed) window.DragMove(); };
@@ -366,9 +331,12 @@ public static class Program {
     var noticeButton = Find<Button>("NoticeButton");
     noticeButton.Click += delegate {
       noticeButton.IsEnabled = false; noticeClickedState = current; noticeClickedAt = Environment.TickCount;
-      Post("/client", "{\"action\":\"" + noticeButton.Tag + "\"}");
+      NoticeAction((string)noticeButton.Tag);
     };
-    Find<Button>("UpdateButton").Click += delegate { Post(updateState == "available" ? "/update/install" : "/update/check", "{}"); };
+    Find<Button>("UpdateButton").Click += async delegate {
+      try { if (updateState == "available") await controller.InstallUpdate(); else await controller.CheckUpdate(true); }
+      catch (Exception e) { Log("Update: " + e.Message); }
+    };
     Find<Button>("OpenLog").Click += delegate { try { Process.Start(logPath); } catch (Exception e) { Log("Could not open the log: " + e.Message); } };
 
     var accent = ((SolidColorBrush)Application.Current.Resources["Accent"]).Color;
@@ -463,24 +431,6 @@ public static class Program {
     stack.Children.Add(top);
     stack.Children.Add(bars);
     return new Border { Padding = new Thickness(6, 6, 6, 8), Child = stack, Tag = new object[] { speed, scale } };
-  }
-
-  static async void Post(string path, string json) {
-    try { await http.PostAsync(Api + path, new StringContent(json, Encoding.UTF8, "application/json")); }
-    catch (Exception e) { Log("Could not send a request to the controller: " + e.Message); }
-  }
-
-  static async void Poll() {
-    if (polling || quitting) return;
-    polling = true;
-    try {
-      var text = await http.GetStringAsync(Api + "/status");
-      failures = 0;
-      Render((Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(text));
-    } catch (Exception) {
-      // The controller is still starting, or it has gone away.
-      if (++failures > 6 || controller.HasExited) ShowStatus(T(controller.HasExited ? "status.stopped" : "status.starting"), "Orange");
-    } finally { polling = false; }
   }
 
   static void ShowStatus(string text, string color) {

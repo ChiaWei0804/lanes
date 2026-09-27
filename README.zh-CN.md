@@ -33,14 +33,17 @@ Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户�
 
 ## 使用
 
-1. 到[最新发行版](https://github.com/ChiaWei0804/lanes/releases/latest)下载 `Lanes-<版本>.zip`；旁边带 `-update` 的文件只用于程序内更新。
+1. 到[最新发行版](https://github.com/ChiaWei0804/lanes/releases/latest)下载 `Lanes-<版本>.zip`。
 2. 解压后把 `Lanes` 文件夹放在任意位置（便携式），运行 `Lanes.exe`。它没有数字签名，首次运行时 Windows 可能弹出警告，请点“更多信息”→“仍要运行”。
 3. 照常打开哔哩哔哩、播放视频即可。
 
-需求：Windows 10 或 11（64 位）与官方哔哩哔哩桌面客户端。无需另外安装任何东西：`node.exe` 就在文件夹里，窗口使用 Windows 自带的 .NET Framework。
+需求：Windows 10 或 11（64 位）与官方哔哩哔哩桌面客户端。无需另外安装任何东西：Lanes 使用 Windows 自带的 .NET Framework。
+
+**从 Lanes 1.0.x 升级：** 1.0.x 的程序内更新无法安装 1.1.0，会显示“更新失败”，1.0.x 保持原样。请改为手动升级：先退出 Lanes（通知区域菜单的“退出 Lanes”），下载 `Lanes-1.1.0.zip` 并解压。要保留设置的话，把旧 `Lanes` 文件夹里的 `settings.json` 复制到新文件夹；之后即可删除旧文件夹，连同其中 88 MB 的 `node.exe`。运行新的 `Lanes.exe` 后，“开机时启动 Lanes”会改为指向新文件夹。1.1.0 之后的版本可以再用程序内更新。
 
 ## 需要知道的事
 
+- 重新启动哔哩哔哩时，Lanes 使用正在运行的那个哔哩哔哩的程序文件，并记下来（`settings.json` 的 `clientExe`）给“打开哔哩哔哩”使用。无法判断安装位置时，会请你选择一次 `哔哩哔哩.exe`。
 - Lanes 通过客户端的调试端口 `127.0.0.1:39229` 接上，只有这台电脑能连接。客户端带着这个端口运行时，这台电脑上的其他程序也能使用它；关闭客户端后端口随之关闭。
 - 加速是否有帮助取决于你的网络。单一连接本来就很快时差别不大；单一连接慢或会卡住时，BTR 最有用。
 - 线程数不是越多越好：连接太多会让 CDN 节点拒绝连接，BTR 会在下一个视频之前停用这些节点。建议使用“自动”。
@@ -50,24 +53,26 @@ Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户�
 
 ## 从源码构建
 
-需要 Windows 与 Node.js 22 及以上。在这个文件夹里运行：
+需要 Windows 与 Node.js 22 及以上，仅用于构建与检查；Lanes 本身不使用 Node。在这个文件夹里运行：
 
 ```
-node build.cjs             # 生成 Lanes.exe；文件夹里没有 node.exe 时，把正在运行的 node.exe 复制进来
-node build.cjs --release   # 另外生成 GitHub 发行版要附上的 dist/Lanes-<版本>.zip 与 dist/Lanes-<版本>-update.zip
-node check.cjs             # 自检
+node build.cjs             # 用 Windows 自带的 C# 编译器生成 Lanes.exe
+node build.cjs --release   # 另外生成 GitHub 发行版要附上的 dist/Lanes-<版本>.zip
+node check.cjs             # 自检：Lanes.exe --self-check，再检查注入播放页的脚本
 ```
 
 | 路径 | 说明 |
 | --- | --- |
-| `btr-local.cjs` | 控制程序：接上客户端、注入 BTR、保存 `settings.json`、自动接上、更新、给窗口用的本机 API |
 | `app/Lanes.cs`、`app/ui.xaml` | 窗口（WPF）、通知区域图标、设置页、日志 |
+| `app/Controller.cs`、`app/Cdp.cs`、`app/Client.cs`、`app/Json.cs` | 控制程序：通过调试端口接上客户端、注入 BTR、保存 `settings.json`、自动接上与重新启动、更新 |
+| `app/page/*.js` | 与 BTR 一起注入播放页的代码：页面判断、租约、每线程测速、状态读取 |
+| `app/SelfCheck.cs`、`check.cjs` | 自检 |
 | `app/lang/*.json` | 界面文字：英文、繁体中文、简体中文 |
 | `vendor/btr/` | BTR 0.9.4.2-d1 的页面文件（commit 80ff272），未修改，MIT 许可证见 `vendor/btr/LICENSE` |
 | `version.json` | 版本号，以及检查更新用的 GitHub 仓库 |
 | `docs/` | 这份 README 里的截图 |
 
-发布 X.Y.Z 版：在 `version.json` 修改版本号，运行 `node build.cjs --release`，在 GitHub 创建标签为 `vX.Y.Z` 的发行版，并附上 `dist/Lanes-X.Y.Z.zip` 与 `dist/Lanes-X.Y.Z-update.zip`。后者是不含 `node.exe` 的同一份内容（约 0.1 MB）；已安装的 Node 与打包时相同时，程序内更新只下载它。
+发布 X.Y.Z 版：在 `version.json` 修改版本号，运行 `node build.cjs --release`，在 GitHub 创建标签为 `vX.Y.Z` 的发行版，并附上 `dist/Lanes-X.Y.Z.zip`。程序内更新下载的也是这个文件。
 
 ## 致谢
 

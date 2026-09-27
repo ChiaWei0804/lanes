@@ -1,62 +1,111 @@
 "use strict";
-// Self-checks for Lanes. Run: node check.cjs
-const assert = require("assert"), fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), http = require("http");
-const { shouldTakeOver, installMeter, isNewer, merged, DEFAULTS, toBtr, needsPush, pushScript, POLL_SCRIPT, checkUpdate, updateState, releaseAssets, download, installUpdate, slotStep, slotMemos } = require("./btr-local.cjs");
+// Self-checks for Lanes. Run after node build.cjs: node check.cjs
+// Lanes.exe checks its own C# (--self-check); this file checks the JavaScript that runs inside the player page, on the
+// exact scripts Lanes.exe injects (--dump-page-scripts), and the language files.
+const assert = require("assert"), fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os");
+const { execFileSync } = require("child_process");
+const exe = path.join(__dirname, "Lanes.exe");
 
-// ---- takeover rule ----
-const now = 1000000, base = { initial: null, attempted: new Set(), lastTakeoverAt: -Infinity, now, restartRunning: false, tries: 0 };
-const fresh = { key: `1@${now - 3000}`, started: now - 3000 }, old = { key: `2@${now - 600000}`, started: now - 600000 };
-assert.equal(shouldTakeOver(fresh, base), true, "a client opened while Lanes runs, 3 s ago");
-assert.equal(shouldTakeOver(null, base), false, "no client");
-assert.equal(shouldTakeOver(old, base), false, "an older client may be playing");
-assert.equal(shouldTakeOver(fresh, { ...base, initial: fresh.key }), false, "the client already running when Lanes started");
-assert.equal(shouldTakeOver(old, { ...base, initial: old.key, restartRunning: true }), true, "with the setting on, the running client is restarted");
-assert.equal(shouldTakeOver(fresh, { ...base, attempted: new Set([fresh.key]) }), false, "a client run already tried once");
-assert.equal(shouldTakeOver(fresh, { ...base, lastTakeoverAt: now - 5000 }), false, "too soon after the last takeover");
-assert.equal(shouldTakeOver(old, { ...base, restartRunning: true, tries: 2 }), false, "two takeovers in a row that never connected stop them");
-console.log("takeover rule: ok");
+process.stdout.write(execFileSync(exe, ["--self-check"], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
 
-// ---- version comparison ----
-assert.equal(isNewer("1.0.1", "1.0.0"), true); assert.equal(isNewer("1.10.0", "1.9.9"), true);
-assert.equal(isNewer("1.0.0", "1.0.0"), false); assert.equal(isNewer("0.9.9", "1.0.0"), false);
-console.log("version comparison: ok");
+const scripts = fs.mkdtempSync(path.join(os.tmpdir(), "lanes-check-"));
+execFileSync(exe, ["--dump-page-scripts", scripts]);
+const dumped = Object.fromEntries(fs.readdirSync(scripts).map(name => [name, fs.readFileSync(path.join(scripts, name), "utf8")]));
+const script = name => dumped[name];
+const POLL_SCRIPT = script("poll.js"), INJECT = script("inject.js");
+const installMeter = vm.runInThisContext(`(${script("meter.js")})`); // with this realm's fetch classes, as in a page
+const vendor = file => fs.readFileSync(path.join(__dirname, "vendor", "btr", file), "utf8");
+fs.rmSync(scripts, { recursive: true, force: true });
 
 // ---- CDN region: "auto" is BTR's custom mode over all of BTR's own nodes ----
-assert.equal(DEFAULTS.mode, "auto");
-assert.equal(merged(DEFAULTS, { mode: "mainland" }).mode, "mainland", "a saved manual choice stays");
-assert.equal(merged({ ...DEFAULTS, mode: "overseas" }, { mode: "custom" }).mode, "overseas", "BTR's own custom mode is not a Lanes choice");
 // A player page with BTR's real node lists and a stand-in for its settings store.
 const page = { URL, location: { href: "https://bilipc.bilibili.com/player.html" } };
 vm.createContext(page);
-for (const file of ["range-core.js", "cdn-resolver.js"]) vm.runInContext(fs.readFileSync(path.join(__dirname, "vendor", "btr", file), "utf8"), page);
+for (const file of ["range-core.js", "cdn-resolver.js"]) vm.runInContext(vendor(file), page);
 const nodes = page.__BILI_CDN_RESOLVER_FACTORY__;
 let stored = { enabled: true, mode: "overseas", customHosts: [], autoConcurrency: true, concurrency: 8 };
 page.__BTR_LOCAL__ = { lease: 0, slots: [] };
 page.__BTR_DESKTOP__ = { getSettings: () => ({ ...stored, customHosts: stored.customHosts.slice() }), setSettings: patch => { stored = { ...stored, ...patch }; }, getStatus: () => ({ transport: {}, playback: null }) };
 const pageSettings = () => vm.runInContext(POLL_SCRIPT, page).settings;
-const auto = { ...DEFAULTS, mode: "auto" }, mainland = { ...DEFAULTS, mode: "mainland" };
-assert.equal(needsPush(pageSettings(), toBtr(auto)), true, "an overseas page is switched to auto");
-vm.runInContext(pushScript(auto), page);
+assert.equal(pageSettings().hostsOk, true, "overseas needs no host list");
+vm.runInContext(script("push-auto.js"), page);
 assert.equal(stored.mode, "custom");
 assert.deepEqual(stored.customHosts, [...nodes.OVERSEAS_HOSTS, ...nodes.MAINLAND_HOSTS], "auto uses every BTR node, overseas and mainland");
-assert.equal(needsPush(pageSettings(), toBtr(auto)), false, "no repeated push once the page matches");
+assert.equal(pageSettings().hostsOk, true, "the page reports BTR's full list");
 stored.customHosts = ["upos-sz-mirrorali.bilivideo.com"];
-assert.equal(needsPush(pageSettings(), toBtr(auto)), true, "a custom list other than BTR's full one is replaced");
-vm.runInContext(pushScript(mainland), page);
-assert.equal(stored.mode, "mainland"); assert.equal(needsPush(pageSettings(), toBtr(mainland)), false);
+assert.equal(pageSettings().hostsOk, false, "a custom list other than BTR's full one is reported");
+vm.runInContext(script("push-mainland.js"), page);
+assert.deepEqual([stored.mode, stored.autoConcurrency, stored.concurrency], ["mainland", false, 16]);
+assert.ok(page.__BTR_LOCAL__.lease > 0, "the poll renews the lease");
+assert.deepEqual(vm.runInNewContext(POLL_SCRIPT, { __BTR_DESKTOP__: {} }), { foreign: true }, "BTR installed in the client is left alone");
+assert.equal(vm.runInNewContext(POLL_SCRIPT, {}), null, "a page without BTR");
 console.log("cdn region: ok");
+
+// ---- the injected bundle: only in the main player page, once; turns BTR off when the lease runs out ----
+// BTR's files go in unmodified and in its build order; the rest of the script runs here without them (they need a
+// real browser).
+const bundle = ["range-core.js", "cdn-resolver.js", "idm-downloader.js", "runtime-notices.js", "notification-view.js", "settings.js", "transport.js", "client.js"].map(vendor).join("\n;\n");
+assert.ok(INJECT.includes(bundle), "the injected script carries BTR's files unmodified, in build order");
+const wrapper = INJECT.replace(bundle, "");
+const player = (href, extra) => {
+  const url = new URL(href), timers = [];
+  const context = { URL, location: { href, origin: url.origin, pathname: url.pathname }, setInterval: (f, ms) => timers.push(f), ...extra };
+  context.window = context.top = context;
+  vm.createContext(context);
+  vm.runInContext(wrapper, context);
+  return { context, timers };
+};
+assert.equal(player("https://www.bilibili.com/player.html").context.__BTR_LOCAL__, undefined, "another origin gets nothing");
+assert.equal(player("https://bilipc.bilibili.com/index.html").context.__BTR_LOCAL__, undefined, "another page gets nothing");
+const framed = { URL, location: { href: "https://bilipc.bilibili.com/player.html", origin: "https://bilipc.bilibili.com", pathname: "/player.html" }, top: {} };
+framed.window = framed; vm.createContext(framed); vm.runInContext(wrapper, framed);
+assert.equal(framed.__BTR_LOCAL__, undefined, "a frame gets nothing");
+const installed = { getSettings: () => ({}), setSettings() {} };
+assert.equal(player("https://bilipc.bilibili.com/player.html", { __BTR_DESKTOP__: installed }).context.__BTR_LOCAL__, undefined, "BTR installed in the client is left alone");
+let off = 0;
+const leased = player("https://bilipc.bilibili.com/player.html", { fetch: async () => new Response("") });
+const { context: ctx, timers } = leased;
+assert.ok(ctx.__BTR_LOCAL__ && Array.isArray(ctx.__BTR_LOCAL__.slots), "the main player page gets the meter");
+assert.match(ctx.__BTR_DESKTOP_RELEASE__.version, new RegExp(`^0\\.9\\.4\\.2-d1\\+lanes-${require("./version.json").version.replace(/\./g, "\\.")}$`));
+ctx.__BTR_DESKTOP__ = { getSettings: () => ({ enabled: true }), setSettings: patch => { if (patch.enabled === false) off++; } };
+timers.forEach(f => f());
+assert.equal(off, 0, "a fresh lease keeps BTR on");
+ctx.__BTR_LOCAL__.lease = Date.now() - 7000;
+timers.forEach(f => f());
+assert.equal(off, 1, "an expired lease turns BTR off");
+// Lanes' settings (the defaults in the dumped script) reach BTR right after its bundle, once per window.
+const session = new Map(), applied = [];
+const stub = "globalThis.__BTR_DESKTOP__ = { getSettings: () => ({ enabled: true }), setSettings: s => globalThis.applied.push(s) }; globalThis.__BILI_CDN_RESOLVER_FACTORY__ = { GLOBAL_HOSTS: ['a.bilivideo.com', 'b.bilivideo.com'] };";
+const openWindow = () => {
+  const c = { URL, applied, setInterval() {}, fetch: async () => new Response(""), location: { href: "https://bilipc.bilibili.com/player.html", origin: "https://bilipc.bilibili.com", pathname: "/player.html" },
+    sessionStorage: { getItem: k => session.has(k) ? session.get(k) : null, setItem: (k, v) => session.set(k, String(v)) } };
+  c.window = c.top = c;
+  vm.createContext(c);
+  vm.runInContext(INJECT.replace(bundle, stub), c);
+};
+openWindow();
+assert.deepEqual(JSON.parse(JSON.stringify(applied)), [{ enabled: true, mode: "custom", autoConcurrency: true, customHosts: ["a.bilivideo.com", "b.bilivideo.com"] }], "a new window starts with Lanes' settings");
+openWindow();
+assert.equal(applied.length, 1, "a reload of the same window keeps BTR's stored settings");
+console.log("injected bundle: ok");
 
 // ---- languages: same keys everywhere, and code without Chinese text ----
 const lang = name => JSON.parse(fs.readFileSync(path.join(__dirname, "app", "lang", `${name}.json`), "utf8"));
 const keys = Object.keys(lang("en")).sort();
 for (const name of ["zh-Hant", "zh-Hans"]) assert.deepEqual(Object.keys(lang(name)).sort(), keys, `${name}.json has the same keys as en.json`);
-const used = new Set([...fs.readFileSync(path.join(__dirname, "app", "Lanes.cs"), "utf8").matchAll(/T\("([^"]+)"/g), ...fs.readFileSync(path.join(__dirname, "app", "ui.xaml"), "utf8").matchAll(/DynamicResource T\.([^}]+)\}/g)].map(m => m[1]));
+const code = ["build.cjs", "check.cjs", "app/ui.xaml", ...fs.readdirSync(path.join(__dirname, "app")).filter(f => f.endsWith(".cs")).map(f => `app/${f}`), ...fs.readdirSync(path.join(__dirname, "app", "page")).map(f => `app/page/${f}`)];
+const read = file => fs.readFileSync(path.join(__dirname, file), "utf8");
+const used = new Set([...read("app/Lanes.cs").matchAll(/T\("([^"]+)"/g), ...read("app/ui.xaml").matchAll(/DynamicResource T\.([^}]+)\}/g)].map(m => m[1]));
+// Lanes.cs also builds keys at run time ("state." + state, notices); those are listed in its tables.
+for (const m of read("app/Lanes.cs").matchAll(/"((?:notice|status|update|state)\.[A-Za-z.]+)"/g)) used.add(m[1]);
 // CJK punctuation, CJK ideographs and full-width forms, by code point so this file stays ASCII.
 const isChinese = c => { const n = c.codePointAt(0); return (n >= 0x3000 && n <= 0x303f) || (n >= 0x3400 && n <= 0x9fff) || (n >= 0xff00 && n <= 0xffef); };
 for (const key of used) assert.ok(keys.includes(key), `"${key}" is used but missing from en.json`);
-for (const file of ["btr-local.cjs", "build.cjs", "check.cjs", "app/Lanes.cs", "app/ui.xaml"]) {
-  const bad = fs.readFileSync(path.join(__dirname, file), "utf8").split(/\r?\n/).findIndex(line => [...line].some(isChinese));
+for (const file of code) {
+  const text = read(file);
+  const bad = text.split(/\r?\n/).findIndex(line => [...line].some(isChinese));
   assert.equal(bad, -1, `${file} line ${bad + 1} has Chinese text; it belongs in app/lang`);
+  assert.ok(!text.includes(String.fromCharCode(0xfeff)), `${file} has a byte order mark character`);
 }
 console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
 
@@ -67,23 +116,23 @@ console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
   const root = { fetch: async (url, init) => url.includes("fail") ? Promise.reject(new TypeError("network")) : answer(url.includes("403") ? 403 : 206, [1000, 500]) };
   const slots = installMeter(root);
   const piece = { headers: { Range: "bytes=0-1499" }, credentials: "omit", cache: "no-store" };
-  const read = async response => new Uint8Array(await new Response(response.body).arrayBuffer()).byteLength;
+  const readAll = async response => new Uint8Array(await new Response(response.body).arrayBuffer()).byteLength;
 
   const [a, b] = await Promise.all([root.fetch("https://a.bilivideo.com/x.m4s", piece), root.fetch("https://b.bilivideo.com/x.m4s", piece)]);
   assert.equal(slots.length, 2, "two pieces in flight take two slots");
   assert.deepEqual(slots.map(s => s.busy), [true, true]);
   assert.equal(a.status, 206); assert.equal(a.headers.get("content-range"), "bytes 0-9/10", "status and headers pass through");
-  assert.equal(await read(a), 1500, "the downloader gets every byte"); assert.equal(await read(b), 1500);
+  assert.equal(await readAll(a), 1500, "the downloader gets every byte"); assert.equal(await readAll(b), 1500);
   assert.deepEqual(slots.map(s => [s.bytes, s.busy, s.host]), [[1500, false, "a.bilivideo.com"], [1500, false, "b.bilivideo.com"]], "bytes counted, slots freed at the end");
 
-  await read(await root.fetch("https://c.bilivideo.com/x.m4s", piece));
+  await readAll(await root.fetch("https://c.bilivideo.com/x.m4s", piece));
   assert.equal(slots.length, 2, "a free slot is reused");
   assert.deepEqual([slots[0].bytes, slots[0].run], [1500, 2], "taken for another node, the slot starts a new run with its own count");
-  await read(await root.fetch("https://c.bilivideo.com/x.m4s", piece));
+  await readAll(await root.fetch("https://c.bilivideo.com/x.m4s", piece));
   assert.deepEqual([slots[0].bytes, slots[0].run], [3000, 2], "the same node again goes on counting in the same run");
 
-  await read(await root.fetch("https://c.bilivideo.com/x.m4s", { headers: { Range: "bytes=0-9" } }));
-  await read(await root.fetch("https://api.bilibili.com/x", {}));
+  await readAll(await root.fetch("https://c.bilivideo.com/x.m4s", { headers: { Range: "bytes=0-9" } }));
+  await readAll(await root.fetch("https://api.bilibili.com/x", {}));
   assert.equal(slots[0].bytes + slots[1].bytes, 4500, "requests that are not BTR pieces are not metered");
 
   const refused = await root.fetch("https://403.bilivideo.com/x.m4s", piece);
@@ -101,88 +150,25 @@ console.log(`languages: ok (${keys.length} strings, ${used.size} used)`);
   assert.equal(slots.filter(s => s.busy).length, 1, "the stale slot went to the new request");
   await new Promise(r => setTimeout(r, 10)); // a stream fills its first chunk on its own, a moment later
   const before = staleSlot.bytes;
-  await read(stale);
+  await readAll(stale);
   assert.equal(staleSlot.bytes, before, "the old stream's late bytes do not count for the new owner");
   assert.equal(staleSlot.busy, true, "the old stream's end does not free the new owner's slot");
-  await read(fresher); Date.now = realNow;
+  await readAll(fresher); Date.now = realNow;
   assert.equal(staleSlot.busy, false);
 
-  // The poll, through the real POLL_SCRIPT: each cell counts only its current node's run.
-  const player = { fetch: async url => new Response(new Uint8Array(url.includes("//a.") ? 1000 : 500), { status: 206 }) };
-  vm.createContext(player);
-  player.__BTR_LOCAL__ = { lease: 0, id: 1, slots: installMeter(player) };
-  player.__BTR_DESKTOP__ = { getSettings: () => ({ mode: "custom", customHosts: [] }), getStatus: () => ({ transport: { networkBytes: 0 }, playback: null }) };
-  const get = async host => read(await player.fetch(`https://${host}.bilivideo.com/x.m4s`, piece));
-  const polled = () => vm.runInContext(POLL_SCRIPT, player);
-  const tab = {};
+  // The poll, through the real poll script: each cell reports its current node's run and bytes.
+  const tabPage = { fetch: async url => new Response(new Uint8Array(url.includes("//a.") ? 1000 : 500), { status: 206 }) };
+  vm.createContext(tabPage);
+  tabPage.__BTR_LOCAL__ = { lease: 0, id: 1, slots: installMeter(tabPage) };
+  tabPage.__BTR_DESKTOP__ = { getSettings: () => ({ mode: "custom", customHosts: [] }), getStatus: () => ({ transport: { networkBytes: 0 }, playback: null }) };
+  const get = async host => readAll(await tabPage.fetch(`https://${host}.bilivideo.com/x.m4s`, piece));
+  const polled = () => vm.runInContext(POLL_SCRIPT, tabPage);
   assert.equal(await get("a"), 1000, "the downloader still gets every byte");
-  let step = slotStep(slotMemos(tab, polled().page)[0] ??= {}, polled().slots[0], 1);
-  assert.deepEqual([step.rate, step.restart], [0, true], "a slot seen for the first time only sets its baseline");
-  assert.equal(await get("b"), 500); await get("a");
-  step = slotStep(slotMemos(tab, polled().page)[0], polled().slots[0], 1);
-  assert.deepEqual([step.rate, step.restart, step.host], [1000, true, "a.bilivideo.com"], "A -> B -> A within one poll: only the last A run counts, and the cell starts over");
+  assert.deepEqual(polled().slots[0], [1000, "a.bilivideo.com", 1]);
+  await get("b"); await get("a");
+  assert.deepEqual(polled().slots[0], [1000, "a.bilivideo.com", 3], "A -> B -> A: a new run that counts only its own bytes");
   await get("a");
-  step = slotStep(slotMemos(tab, polled().page)[0], polled().slots[0], 1);
-  assert.deepEqual([step.rate, step.restart], [1000, false], "the same run keeps growing");
-  assert.equal(slotMemos(tab, 2).length, 0, "a reloaded page (new meter id) starts with fresh baselines");
-  assert.deepEqual(slotStep({ bytes: 100, run: undefined }, [300, "x", undefined], 1), { rate: 200, restart: false, host: "x" }, "a page from an older Lanes counts as one run");
+  assert.deepEqual(polled().slots[0], [2000, "a.bilivideo.com", 3], "the same run keeps growing");
+  assert.equal(polled().page, 1);
   console.log("thread meter: ok");
-
-  // ---- automatic update checks only find a release; one that fails keeps the last result ----
-  const quiet = console.error; console.error = () => {};
-  const realFetch = global.fetch;
-  let calls = 0;
-  const github = reply => { global.fetch = async () => { calls++; return reply(); }; };
-  const release = v => ({ ok: true, status: 200, json: async () => ({ tag_name: `v${v}`, assets: [{ name: `Lanes-${v}.zip`, browser_download_url: `https://github.com/${require("./version.json").repository}/releases/download/v${v}/Lanes-${v}.zip` }] }) });
-  github(() => ({ ok: false, status: 404 })); await checkUpdate(false);
-  assert.equal(updateState(), "latest", "no release published yet");
-  github(() => { throw new TypeError("fetch failed"); }); await checkUpdate(false);
-  assert.equal(updateState(), "latest", "an automatic check that fails keeps the last result");
-  await checkUpdate(true);
-  assert.equal(updateState(), "failed", "a manual check shows its failure");
-  github(() => release("99.0.0")); await checkUpdate(false);
-  assert.equal(updateState(), "available");
-  calls = 0; await checkUpdate(false);
-  assert.equal(calls, 0, "a found release is not checked again automatically"); assert.equal(updateState(), "available");
-  // A failed install leaves no temporary folder behind.
-  const updateFolders = () => fs.readdirSync(os.tmpdir()).filter(name => name.startsWith("lanes-update-")).length;
-  const foldersBefore = updateFolders();
-  global.fetch = async () => ({ ok: false, status: 404, headers: new Headers() });
-  assert.equal(await installUpdate(), false); assert.equal(updateState(), "install-failed");
-  assert.equal(updateFolders(), foldersBefore, "the failed install removed its temporary folder");
-  global.fetch = realFetch;
-  console.error = quiet;
-  console.log("update checks: ok");
-
-  // ---- update packages: the small one is optional; downloads report percents and stop only when stalled ----
-  const repo = require("./version.json").repository, asset = (name, url = `https://github.com/${repo}/releases/download/v9.0.0/${name}`) => ({ name, size: name.includes("update") ? 2 : 3, browser_download_url: url });
-  assert.deepEqual(releaseAssets({ assets: [asset("Lanes-9.0.0.zip"), asset("Lanes-9.0.0-update.zip")] }, "9.0.0"),
-    { full: { url: asset("Lanes-9.0.0.zip").browser_download_url, size: 3 }, small: { url: asset("Lanes-9.0.0-update.zip").browser_download_url, size: 2 } });
-  const foreignSmall = releaseAssets({ assets: [asset("Lanes-9.0.0.zip"), asset("Lanes-9.0.0-update.zip", "https://example.com/Lanes-9.0.0-update.zip")] }, "9.0.0");
-  assert.ok(foreignSmall.full && !foreignSmall.small, "a small package from elsewhere is ignored; the full one is still used");
-  assert.ok(!releaseAssets({ assets: [asset("Lanes-9.0.0-update.zip")] }, "9.0.0").full, "without the full package there is no update");
-
-  // A real local server and the real fetch: chunks of the given sizes, one every `gap` ms, then the end or silence.
-  let scenario;
-  const server = http.createServer((req, res) => scenario(res));
-  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-  const at = `http://127.0.0.1:${server.address().port}/`;
-  const drip = (sizes, gap, { end = true, length } = {}) => res => {
-    res.writeHead(200, length ? { "Content-Length": length } : {});
-    let i = 0;
-    const timer = setInterval(() => { if (i < sizes.length) res.write(Buffer.alloc(sizes[i++])); else { clearInterval(timer); if (end) res.end(); } }, gap);
-    res.on("close", () => clearInterval(timer));
-  };
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lanes-check-")), file = path.join(tmp, "package.zip");
-  let seen = [];
-  scenario = drip([500, 500], 40); await download(at, file, 1000, p => seen.push(p), 300);
-  assert.equal(fs.statSync(file).size, 1000); assert.deepEqual(seen, [50, 100], "percents from GitHub's asset size");
-  seen = []; scenario = drip([250, 750], 40, { length: 1000 }); await download(at, file, 0, p => seen.push(p), 300);
-  assert.deepEqual(seen, [25, 100], "percents from Content-Length when there is no asset size");
-  scenario = drip(Array(12).fill(10), 60); await download(at, file, 120, () => {}, 200);
-  assert.equal(fs.statSync(file).size, 120, "a download that keeps moving is not cut: 720 ms with a 200 ms stall limit");
-  scenario = drip([10], 10, { end: false }); await assert.rejects(download(at, file, 100, () => {}, 200), /no data for 0.2 s/);
-  scenario = drip([10], 10); await assert.rejects(download(at, file, 100, () => {}, 200), /download incomplete: 10 of 100 bytes/);
-  server.closeAllConnections(); server.close(); fs.rmSync(tmp, { recursive: true, force: true });
-  console.log("update packages: ok");
 })().catch(error => { console.error(error); process.exit(1); });

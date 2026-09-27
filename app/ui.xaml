@@ -3,7 +3,7 @@
         Title="Lanes" Width="416" SizeToContent="Height" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
-        FontFamily="{DynamicResource Body}" FontSize="15"
+        FontFamily="{DynamicResource Body}" FontSize="15" FontWeight="{DynamicResource W.Normal}"
         Foreground="{DynamicResource Text}">
   <Window.Resources>
 
@@ -55,7 +55,7 @@
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Focusable" Value="False"/>
       <Setter Property="Foreground" Value="White"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="FontWeight" Value="{DynamicResource W.SemiBold}"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
@@ -153,7 +153,7 @@
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
       <Setter Property="FontSize" Value="13.5"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="FontWeight" Value="{DynamicResource W.SemiBold}"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
@@ -173,7 +173,7 @@
     <Style x:Key="RowTitle" TargetType="TextBlock">
       <Setter Property="FontSize" Value="16"/>
       <Setter Property="TextWrapping" Value="Wrap"/>
-      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="FontWeight" Value="{DynamicResource W.Medium}"/>
     </Style>
     <Style x:Key="RowSub" TargetType="TextBlock">
       <Setter Property="FontSize" Value="12.5"/>
@@ -204,7 +204,7 @@
               <TextBlock Text="{DynamicResource T.nav.back}" FontSize="15"/>
             </StackPanel>
           </Button>
-          <TextBlock Text="{DynamicResource T.settings.title}" FontFamily="{DynamicResource Display}" FontSize="26" FontWeight="Bold" Margin="0,2,0,0"/>
+          <TextBlock Text="{DynamicResource T.settings.title}" FontFamily="{DynamicResource Display}" FontSize="26" FontWeight="{DynamicResource W.Bold}" Margin="0,2,0,0"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-6,0">
           <Button x:Name="SettingsButton" Style="{StaticResource WindowButton}" ToolTip="{DynamicResource T.tip.settings}" Margin="0,0,2,0">
@@ -244,8 +244,8 @@
                       <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
                     </Border>
                     <UniformGrid Rows="1">
-                      <Button x:Name="ViewTotal" Style="{StaticResource PlainButton}"><TextBlock Text="{DynamicResource T.view.total}" FontSize="12" FontWeight="SemiBold"/></Button>
-                      <Button x:Name="ViewThreads" Style="{StaticResource PlainButton}"><TextBlock Text="{DynamicResource T.view.threads}" FontSize="12" FontWeight="SemiBold"/></Button>
+                      <Button x:Name="ViewTotal" Style="{StaticResource PlainButton}"><TextBlock Text="{DynamicResource T.view.total}" FontSize="12" FontWeight="{DynamicResource W.SemiBold}"/></Button>
+                      <Button x:Name="ViewThreads" Style="{StaticResource PlainButton}"><TextBlock Text="{DynamicResource T.view.threads}" FontSize="12" FontWeight="{DynamicResource W.SemiBold}"/></Button>
                     </UniformGrid>
                   </Grid>
                 </Border>
