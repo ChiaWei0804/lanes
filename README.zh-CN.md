@@ -8,7 +8,7 @@ Lanes 是一个便携式的 Windows 小程序，让官方哔哩哔哩桌面客�
 
 **加速功能不是 Lanes 做的**，而是 LouieTang（[MrTangLuyao](https://github.com/MrTangLuyao)）开发的 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**。Lanes 原封不动地运行 BTR 桌面版 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的页面代码，只另外加上一个独立的操作窗口。Lanes 是非官方的第三方项目，并非 BTR 作者制作或认可。
 
-**使用的 BTR 版本：** Bilibili-thread-ripper-desktop **0.9.4.2-d1**（[commit 80ff272](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/80ff27254c354eaf8e87d1ff19124122691a9259)）。Lanes 跟随的是 BTR 的桌面版，而不是浏览器版。
+**使用的 BTR 版本：** Bilibili-thread-ripper-desktop **2026.9.29.1-d1**（[commit b16b10f](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/b16b10f1122cc3a942832d0baa4ab3f1b08493b3)）。Lanes 跟随的是 BTR 的桌面版，而不是浏览器版。
 
 Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户端就回到原生下载。
 
@@ -39,7 +39,7 @@ Lanes 不会修改哔哩哔哩客户端的任何文件，关闭 Lanes 后客户�
 
 需求：Windows 10 或 11（64 位）与官方哔哩哔哩桌面客户端。无需另外安装任何东西：Lanes 使用 Windows 自带的 .NET Framework。
 
-**从 Lanes 1.0.x 升级：** 1.0.x 的程序内更新无法安装 1.1.0，会显示“更新失败”，1.0.x 保持原样。请改为手动升级：先退出 Lanes（通知区域菜单的“退出 Lanes”），下载 `Lanes-1.1.0.zip` 并解压。要保留设置的话，把旧 `Lanes` 文件夹里的 `settings.json` 复制到新文件夹；之后即可删除旧文件夹，连同其中 88 MB 的 `node.exe`。运行新的 `Lanes.exe` 后，“开机时启动 Lanes”会改为指向新文件夹。1.1.0 之后的版本可以再用程序内更新。
+**从 Lanes 1.0.x 升级：** 1.0.x 无法自行更新到 1.1 以后的版本，也不会再提示有新版本。请改为手动升级：先退出 Lanes（通知区域菜单的“退出 Lanes”），下载最新的 `Lanes-<版本>.zip` 并解压。要保留设置的话，把旧 `Lanes` 文件夹里的 `settings.json` 复制到新文件夹；之后即可删除旧文件夹，连同其中 88 MB 的 `node.exe`。运行新的 `Lanes.exe` 后，“开机时启动 Lanes”会改为指向新文件夹。1.1.0 之后的版本可以再用程序内更新。
 
 ## 需要知道的事
 
@@ -68,7 +68,7 @@ node check.cjs             # 自检：Lanes.exe --self-check，再检查注入�
 | `app/page/*.js` | 与 BTR 一起注入播放页的代码：页面判断、租约、每线程测速、状态读取 |
 | `app/SelfCheck.cs`、`check.cjs` | 自检 |
 | `app/lang/*.json` | 界面文字：英文、繁体中文、简体中文 |
-| `vendor/btr/` | BTR 0.9.4.2-d1 的页面文件（commit 80ff272），未修改，MIT 许可证见 `vendor/btr/LICENSE` |
+| `vendor/btr/` | BTR 2026.9.29.1-d1 的页面文件（commit b16b10f），未修改，MIT 许可证见 `vendor/btr/LICENSE` |
 | `version.json` | 版本号，以及检查更新用的 GitHub 仓库 |
 | `docs/` | 这份 README 里的截图 |
 

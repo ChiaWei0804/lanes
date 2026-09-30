@@ -8,7 +8,7 @@ Bilibili videos often stuttered for me, and BTR really solved that. I didn't wan
 
 **The acceleration is not Lanes' own work.** It is **[Bilibili-thread-ripper (BTR)](https://github.com/MrTangLuyao/Bilibili-thread-ripper)** by LouieTang ([MrTangLuyao](https://github.com/MrTangLuyao)). Lanes runs the page code of BTR's desktop edition, **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)**, unmodified, and only adds a separate window to control it. Lanes is an unofficial third-party project; BTR's author did not make or endorse it.
 
-**BTR version used:** Bilibili-thread-ripper-desktop **0.9.4.2-d1** ([commit 80ff272](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/80ff27254c354eaf8e87d1ff19124122691a9259)). Lanes follows BTR's desktop edition, not the browser one.
+**BTR version used:** Bilibili-thread-ripper-desktop **2026.9.29.1-d1** ([commit b16b10f](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/b16b10f1122cc3a942832d0baa4ab3f1b08493b3)). Lanes follows BTR's desktop edition, not the browser one.
 
 Lanes does not change any file of the Bilibili client, and when Lanes is closed the client downloads natively again.
 
@@ -39,7 +39,7 @@ Lanes does not change any file of the Bilibili client, and when Lanes is closed 
 
 Requirements: Windows 10 or 11 (64-bit) and the official Bilibili desktop client. Nothing else to install: Lanes uses the .NET Framework built into Windows.
 
-**Upgrading from Lanes 1.0.x:** the in-app update of 1.0.x cannot install 1.1.0. It shows "The update failed" and leaves 1.0.x as it was. Instead, quit Lanes (**Quit Lanes** in the tray menu), download `Lanes-1.1.0.zip` and extract it. To keep your settings, copy `settings.json` from the old `Lanes` folder into the new one; then the old folder, with its 88 MB `node.exe`, can be deleted. **Start at sign-in** points to the new folder once you run the new `Lanes.exe`. From 1.1.0 on, updates install from inside Lanes again.
+**Upgrading from Lanes 1.0.x:** Lanes 1.0.x cannot update itself to 1.1 or later, and no longer reports new versions. Quit Lanes (**Quit Lanes** in the tray menu), download the latest `Lanes-<version>.zip` and extract it. To keep your settings, copy `settings.json` from the old `Lanes` folder into the new one; then the old folder, with its 88 MB `node.exe`, can be deleted. **Start at sign-in** points to the new folder once you run the new `Lanes.exe`. From 1.1.0 on, updates install from inside Lanes again.
 
 ## Good to know
 
@@ -67,7 +67,7 @@ node check.cjs             # self-checks: Lanes.exe --self-check, then the scrip
 | `app/page/*.js` | Code injected into the player page next to BTR: page guard, lease, per-thread meter, status poll |
 | `app/SelfCheck.cs`, `check.cjs` | Self-checks |
 | `app/lang/*.json` | Interface text in English, Traditional Chinese and Simplified Chinese |
-| `vendor/btr/` | BTR 0.9.4.2-d1 page files (commit 80ff272), unmodified, MIT license in `vendor/btr/LICENSE` |
+| `vendor/btr/` | BTR 2026.9.29.1-d1 page files (commit b16b10f), unmodified, MIT license in `vendor/btr/LICENSE` |
 | `version.json` | Version and the GitHub repository checked for updates |
 | `docs/` | The screenshots in this README |
 

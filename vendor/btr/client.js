@@ -5,19 +5,21 @@
   // 自动线程数 (the controller lives in the shared idm-downloader.js). The client's own video
   // element tells it what the browser version's player tells it there: a stall once playback
   // had started, and a low buffer that stops growing while bytes arrive. A new video or a
-  // seek starts the buffer watch afresh.
+  // seek starts the buffer watch afresh, and opens with more threads; switched off, the
+  // controller is left alone.
   const auto = root.__BILI_IDM_DOWNLOADER_FACTORY__?.autoConcurrency;
   const autoOn = () => { const settings = api.getSettings(); return settings.enabled && settings.autoConcurrency; };
+  const newSession = () => { if (autoOn()) auto?.newSession(); };
   let watched = null, watchEvents = null;
   function watch(element) {
     if (!auto || element === watched) return;
-    watchEvents?.abort(); watchEvents = null; watched = element; auto.newSession();
+    watchEvents?.abort(); watchEvents = null; watched = element; newSession();
     if (!element) return;
     const events = watchEvents = new AbortController();
     const on = (name, handler) => element.addEventListener(name, handler, { signal: events.signal });
     let started = false; // playing since the last load or seek
-    on("emptied", () => { started = false; auto.newSession(); });
-    on("seeking", () => { started = false; auto.newSession(); });
+    on("emptied", () => { started = false; newSession(); });
+    on("seeking", () => { started = false; newSession(); });
     on("playing", () => { started = true; });
     on("waiting", () => { if (started && autoOn() && !element.seeking && !element.paused) auto.stall("播放卡了一下"); });
     on("timeupdate", () => {
@@ -67,7 +69,7 @@
     if (next !== player || key !== identity) {
       notices.detach(); player = next; identity = key; video = null;
       api.transport.switchRoute(key);
-      auto?.newSession();
+      newSession();
     }
     bind(next);
     watch(element?.isConnected ? element : null);

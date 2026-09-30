@@ -8,7 +8,7 @@ Lanes 是一個可攜式的 Windows 小程式，讓官方嗶哩嗶哩桌面客�
 
 **加速功能不是 Lanes 做的**，而是 LouieTang（[MrTangLuyao](https://github.com/MrTangLuyao)）開發的 **[Bilibili-thread-ripper（BTR）](https://github.com/MrTangLuyao/Bilibili-thread-ripper)**。Lanes 原封不動地執行 BTR 桌面版 **[Bilibili-thread-ripper-desktop](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop)** 的頁面程式碼，只另外加上一個獨立的操作視窗。Lanes 是非官方的第三方專案，並非 BTR 作者製作或認可。
 
-**使用的 BTR 版本：** Bilibili-thread-ripper-desktop **0.9.4.2-d1**（[commit 80ff272](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/80ff27254c354eaf8e87d1ff19124122691a9259)）。Lanes 跟隨的是 BTR 的桌面版，不是瀏覽器版。
+**使用的 BTR 版本：** Bilibili-thread-ripper-desktop **2026.9.29.1-d1**（[commit b16b10f](https://github.com/MrTangLuyao/Bilibili-thread-ripper-desktop/commit/b16b10f1122cc3a942832d0baa4ab3f1b08493b3)）。Lanes 跟隨的是 BTR 的桌面版，不是瀏覽器版。
 
 Lanes 不會修改嗶哩嗶哩客戶端的任何檔案，關掉 Lanes，客戶端就回到原生下載。
 
@@ -39,7 +39,7 @@ Lanes 不會修改嗶哩嗶哩客戶端的任何檔案，關掉 Lanes，客戶�
 
 需求：Windows 10 或 11（64 位元）與官方嗶哩嗶哩桌面客戶端。不需要另外安裝任何東西：Lanes 使用 Windows 內建的 .NET Framework。
 
-**從 Lanes 1.0.x 升級：** 1.0.x 的程式內更新無法安裝 1.1.0，會顯示「更新失敗」，1.0.x 維持原狀。請改用手動方式：先結束 Lanes（通知區域選單的「結束 Lanes」），下載 `Lanes-1.1.0.zip` 並解壓縮。要保留設定的話，把舊 `Lanes` 資料夾裡的 `settings.json` 複製到新資料夾；之後就可以刪掉舊資料夾，連同其中 88 MB 的 `node.exe`。執行新的 `Lanes.exe` 後，「開機時啟動 Lanes」會改指向新資料夾。1.1.0 之後的版本可以再用程式內更新。
+**從 Lanes 1.0.x 升級：** 1.0.x 無法自行更新到 1.1 以後的版本，也不會再提示有新版本。請改用手動方式：先結束 Lanes（通知區域選單的「結束 Lanes」），下載最新的 `Lanes-<版本>.zip` 並解壓縮。要保留設定的話，把舊 `Lanes` 資料夾裡的 `settings.json` 複製到新資料夾；之後就可以刪掉舊資料夾，連同其中 88 MB 的 `node.exe`。執行新的 `Lanes.exe` 後，「開機時啟動 Lanes」會改指向新資料夾。1.1.0 之後的版本可以再用程式內更新。
 
 ## 需要知道的事
 
@@ -67,7 +67,7 @@ node check.cjs             # 自我檢查：Lanes.exe --self-check，再檢查�
 | `app/page/*.js` | 與 BTR 一起注入播放頁的程式碼：頁面判斷、租約、每執行緒測速、狀態讀取 |
 | `app/SelfCheck.cs`、`check.cjs` | 自我檢查 |
 | `app/lang/*.json` | 介面文字：英文、繁體中文、簡體中文 |
-| `vendor/btr/` | BTR 0.9.4.2-d1 的頁面檔（commit 80ff272），未修改，MIT 授權見 `vendor/btr/LICENSE` |
+| `vendor/btr/` | BTR 2026.9.29.1-d1 的頁面檔（commit b16b10f），未修改，MIT 授權見 `vendor/btr/LICENSE` |
 | `version.json` | 版本號，以及檢查更新用的 GitHub repository |
 | `docs/` | 這份 README 裡的截圖 |
 
